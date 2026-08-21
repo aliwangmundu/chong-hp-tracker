@@ -61,7 +61,7 @@ export default function TokenRow({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={[
-        "group flex items-center gap-1.5 rounded-lg px-1.5 py-1",
+        "group flex items-center gap-1 rounded-lg px-1 py-1",
         "hover:bg-ink-100/70 dark:hover:bg-ink-900/60",
         isDragging ? "z-10 opacity-80 shadow-lg" : "",
         selected ? "bg-ink-100 dark:bg-ink-900" : "",
@@ -110,7 +110,7 @@ export default function TokenRow({
       <AcField
         label={`${token.name} armor class`}
         value={ac}
-        widthClass="w-11 shrink-0"
+        widthClass="w-10 shrink-0"
         onCommit={(next) => onAcChange(token.id, next)}
       />
 

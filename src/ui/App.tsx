@@ -34,10 +34,20 @@ import {
 } from "@/core/types";
 import CategorySection, { categoryFromDroppableId } from "./CategorySection";
 import HideToggle from "./HideToggle";
-import TokenDrawer, { DETAIL_WIDTH } from "./TokenDrawer";
+import TokenDrawer, {
+  DETAIL_TRANSITION_MS,
+  DETAIL_WIDTH,
+} from "./TokenDrawer";
 
-/** Popover width with only the token list showing. Matches manifest.json. */
-const PANEL_WIDTH = 320;
+/**
+ * Popover width with only the token list showing.
+ *
+ * This is the authority — the effect below sets it on every close, so the
+ * matching `action.width` in manifest.json only governs the very first frame.
+ * Keep the two the same anyway, or the panel visibly jumps the first time a
+ * card is closed.
+ */
+const PANEL_WIDTH = 288;
 
 export default function App() {
   const [tokens, setTokens] = useState<TrackedToken[]>([]);
@@ -169,20 +179,55 @@ export default function App() {
     [detailsFor, tokens],
   );
 
-  const detailsOpen = detailsToken !== null;
+  const wantDetails = detailsToken !== null;
+  /** The card is in the tree — stays true through the closing animation. */
+  const [detailsMounted, setDetailsMounted] = useState(false);
+  /** The card is in its resting position. Drives the slide. */
+  const [detailsShown, setDetailsShown] = useState(false);
 
   /**
-   * Grow the popover instead of covering the list.
+   * Grow the popover instead of covering the list, and sequence the two so the
+   * card appears to slide.
    *
-   * Owlbear sizes the popover from the manifest, but an extension can resize
-   * its own; widening by exactly the card's width is what puts the second
-   * window beside the first rather than over it.
+   * `OBR.action.setWidth` snaps — there is no animated form of it. So on the
+   * way in the window widens first and the card slides into the space that
+   * just appeared; on the way out the card slides away first and the window
+   * only shrinks once it has gone. Doing either in the other order is what
+   * makes it look like it teleports.
    */
   useEffect(() => {
-    void OBR.action.setWidth(
-      detailsOpen ? PANEL_WIDTH + DETAIL_WIDTH : PANEL_WIDTH,
-    );
-  }, [detailsOpen]);
+    if (wantDetails) {
+      setDetailsMounted(true);
+      void OBR.action.setWidth(PANEL_WIDTH + DETAIL_WIDTH);
+
+      // Two frames: one for React to paint the off-screen start position,
+      // one to flip to the resting position so the transition actually runs.
+      let inner = 0;
+      const outer = requestAnimationFrame(() => {
+        inner = requestAnimationFrame(() => setDetailsShown(true));
+      });
+      return () => {
+        cancelAnimationFrame(outer);
+        cancelAnimationFrame(inner);
+      };
+    }
+
+    setDetailsShown(false);
+    const timer = window.setTimeout(() => {
+      setDetailsMounted(false);
+      void OBR.action.setWidth(PANEL_WIDTH);
+    }, DETAIL_TRANSITION_MS);
+    return () => window.clearTimeout(timer);
+  }, [wantDetails]);
+
+  // Held over so the card keeps its content while it slides away.
+  const [lastDetailsToken, setLastDetailsToken] = useState<TrackedToken | null>(
+    null,
+  );
+  useEffect(() => {
+    if (detailsToken !== null) setLastDetailsToken(detailsToken);
+  }, [detailsToken]);
+  const cardToken = detailsToken ?? lastDetailsToken;
 
   // The token was deleted from the scene while its card was open.
   useEffect(() => {
@@ -297,9 +342,10 @@ export default function App() {
         )}
       </main>
 
-      {detailsOpen && (
+      {detailsMounted && cardToken !== null && (
         <TokenDrawer
-          token={detailsToken}
+          token={cardToken}
+          shown={detailsShown}
           onClose={() => setDetailsFor(null)}
           onStatChange={handleStatChange}
         />

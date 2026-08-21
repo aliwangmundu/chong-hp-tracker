@@ -2,11 +2,6 @@ import OBR, { type Image, type Item } from "@owlbear-rodeo/sdk";
 import { getPluginId } from "@/core/pluginId";
 import { getTrackedStats, isTrackableItem, parseStats } from "@/core/metadata";
 import {
-  initPersistence,
-  reconcilePersistence,
-  resetPersistence,
-} from "./persistence";
-import {
   attachmentIds,
   attachmentSignature,
   buildAttachments,
@@ -14,11 +9,11 @@ import {
 } from "./attachments";
 
 /**
- * Draws the HP bar and AC bubble on tokens.
+ * Draws the HP and AC bubbles on tokens.
  *
  * Attachments are *local* items: every client renders its own from the shared
  * token metadata. That keeps them out of the saved scene, out of undo history,
- * and stops five extra items per token from being replicated to everyone.
+ * and stops four extra items per token from being replicated to everyone.
  */
 
 /** Signature of what we last drew, per token. Our whole diffing state. */
@@ -37,10 +32,6 @@ async function clearLocalAttachments(): Promise<void> {
 
 async function sync(items: Item[]): Promise<void> {
   const tokens = items.filter(isTrackableItem);
-
-  // Ally stats ride along with the scene sync; a restore writes metadata, which
-  // comes back through here and redraws the bubbles.
-  void reconcilePersistence(tokens);
 
   const toAdd: Item[] = [];
   const toDelete: string[] = [];
@@ -101,15 +92,12 @@ async function start(): Promise<void> {
 }
 
 OBR.onReady(async () => {
-  await initPersistence();
-
   OBR.scene.onReadyChange((ready) => {
     if (ready) {
       void start();
     } else {
       running = false;
       drawn.clear();
-      resetPersistence();
     }
   });
 

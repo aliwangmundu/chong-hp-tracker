@@ -25,9 +25,6 @@ export type TokenStats = {
   index: number;
 };
 
-/** The stats that persist across scenes, for allies. */
-export type PortableStats = Pick<TokenStats, "hp" | "extraHp" | "maxHp" | "ac">;
-
 /** Which stats are actually being tracked, so bubbles only show when asked for. */
 export type TrackedStats = {
   hp: boolean;

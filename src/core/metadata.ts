@@ -4,7 +4,6 @@ import { getPluginId } from "./pluginId";
 import {
   type Category,
   type NumericStatKey,
-  type PortableStats,
   type TokenStats,
   type TrackedStats,
   type TrackedToken,
@@ -89,15 +88,6 @@ export function parseStats(item: Item): TokenStats {
   };
 }
 
-/** The subset that follows an ally from scene to scene. */
-export function portableStats(stats: TokenStats): PortableStats {
-  return {
-    hp: stats.hp,
-    extraHp: stats.extraHp,
-    maxHp: stats.maxHp,
-    ac: stats.ac,
-  };
-}
 
 /**
  * Which stats have ever been set on this token.

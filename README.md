@@ -12,8 +12,6 @@ columns, and a health field you can do arithmetic in.
 - **Two categories.** Allies and Adversaries. Drag rows between them; the
   order sticks with the scene.
 - **Three columns.** Token, HP, AC. Everything else is behind the `+` button.
-- **Allies persist across scenes.** Change map and your party arrives with the
-  HP, AC and temporary HP they had. See below for how a token is recognised.
 - **AC is free text.** Three characters, so `18`, `M` and `?` are all fine.
 - **Inline math in the HP field.** Click into HP and keep typing:
 
@@ -101,25 +99,10 @@ index.html       landing page that prints the install URL
 ```
 
 ```
-src/core/    plugin id, metadata, inline math, sorting, AC, persistence store
-src/obr/     bounds maths, bubble builders, the sync loop, scene persistence
+src/core/    plugin id, token metadata, inline math, sorting, AC  (no SDK, unit tested)
+src/obr/     bounds maths, bubble builders, the sync loop
 src/ui/      the panel
 ```
-
-### How persistence works
-
-Item ids are minted per scene, so they cannot identify a character across maps.
-The key is **image URL plus name** — the art says which token it is, the name
-separates two goblins cut from the same image. Rename a character and it starts
-a fresh history.
-
-Stats live in **room** metadata, which is scoped to the room and outlives any
-one scene. A token is restored exactly once, the first time it is seen in the
-current scene; after that it only ever saves. Without that rule a restore would
-overwrite the edit that triggered it and the two would ping-pong.
-
-Only the GM reconciles. Every client runs the background script, and letting
-them all write the same room key would mean the last writer wins at random.
 
 ### Notes on the design
 
@@ -127,6 +110,10 @@ them all write the same room key would mean the last writer wins at random.
   list alone; opening a token's extra stats calls `OBR.action.setWidth` to grow
   the window by exactly the second card's width. `PANEL_WIDTH` in
   `src/ui/App.tsx` must stay in step with `action.width` in the manifest.
+- **Open and close are sequenced, not simultaneous.** `setWidth` snaps — there
+  is no animated form of it — so opening widens the window first and then
+  slides the card into the space that appeared, and closing slides the card
+  away before shrinking. Doing either in the other order looks like a teleport.
 
 - **Attachments are local items.** Each client draws its own bubbles from the
   shared token metadata, so the scene file stays clean, undo history is not
@@ -146,8 +133,6 @@ them all write the same room key would mean the last writer wins at random.
 
 - New tokens land in **Adversaries** — `DEFAULT_CATEGORY` in
   `src/core/metadata.ts`.
-- Only **allies** persist across scenes — the category check in
-  `src/obr/persistence.ts`.
 - AC allows three characters — `AC_MAX_LENGTH` in `src/core/ac.ts`.
 - HP floors at 0 and is capped by max HP once one is set; a max of 0 means no
   cap — `clampHp` in `src/core/inlineMath.ts`.
