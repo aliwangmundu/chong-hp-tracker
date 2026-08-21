@@ -6,18 +6,25 @@ import type {
   Resource,
   TrackedToken,
 } from "@/core/types";
+import type { RollLogEntry } from "@/core/rolls";
 import ConditionList from "./ConditionList";
 import ResourceList from "./ResourceList";
+import RollLog from "./RollLog";
+import RollSection from "./RollSection";
 import StatField from "./StatField";
 
 /** Extra popover width the second card needs, in pixels. */
-export const DETAIL_WIDTH = 260;
+export const DETAIL_WIDTH = 280;
 
 type Props = {
   token: TrackedToken;
   onStatChange: (id: string, key: NumericStatKey, value: number) => void;
   onConditionsChange: (id: string, next: Condition[]) => void;
   onResourcesChange: (id: string, next: Resource[]) => void;
+  onRollTextChange: (id: string, field: "roll" | "rollNote", next: string) => void;
+  onRoll: (id: string, expression: string) => void;
+  rollError: string | null;
+  log: RollLogEntry[];
 };
 
 /**
@@ -36,6 +43,10 @@ export default function TokenDrawer({
   onStatChange,
   onConditionsChange,
   onResourcesChange,
+  onRollTextChange,
+  onRoll,
+  rollError,
+  log,
 }: Props) {
   return (
     <div
@@ -93,6 +104,17 @@ export default function TokenDrawer({
           resources={token.stats.resources}
           onChange={(next) => onResourcesChange(token.id, next)}
         />
+
+        <RollSection
+          expression={token.stats.roll}
+          note={token.stats.rollNote}
+          error={rollError}
+          onExpressionChange={(next) => onRollTextChange(token.id, "roll", next)}
+          onNoteChange={(next) => onRollTextChange(token.id, "rollNote", next)}
+          onRoll={(expression) => onRoll(token.id, expression)}
+        />
+
+        <RollLog entries={log} />
       </div>
     </div>
   );

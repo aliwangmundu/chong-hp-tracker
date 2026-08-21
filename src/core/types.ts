@@ -36,6 +36,10 @@ export type TokenStats = {
   ac: string;
   conditions: Condition[];
   resources: Resource[];
+  /** Remembered dice expression, so a character keeps its attack to hand. */
+  roll: string;
+  /** Free note attached to whatever this token rolls next. */
+  rollNote: string;
   category: Category;
   /** Sort position within the token's category. -1 means "not placed yet". */
   index: number;

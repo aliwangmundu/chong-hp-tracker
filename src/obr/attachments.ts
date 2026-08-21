@@ -21,6 +21,11 @@ const HP_FILL = "#8b1c1c";
 const HP_STROKE = "#fca5a5";
 const AC_FILL = "#1e293b";
 const AC_STROKE = "#cbd5e1";
+const CONDITION_FILL = "#4c1d95";
+const CONDITION_STROKE = "#c4b5fd";
+/** An effect that has run out but has not been cleared yet. */
+const CONDITION_EXPIRED_FILL = "#7f1d1d";
+const CONDITION_EXPIRED_STROKE = "#fca5a5";
 const TEXT_COLOR = "#ffffff";
 
 const FILL_OPACITY = 0.85;
@@ -30,6 +35,9 @@ const STROKE_OPACITY = 0.55;
 // Deterministic ids let the sync loop rebuild an attachment in place and find
 // orphans without keeping a side table.
 
+/** Condition circles drawn on a token before the row runs out of space. */
+export const MAX_CONDITION_BUBBLES = 4;
+
 const SUFFIXES = {
   hpCircle: "/chong-hp-circle",
   hpText: "/chong-hp-text",
@@ -37,7 +45,15 @@ const SUFFIXES = {
   acText: "/chong-ac-text",
 } as const;
 
-const ALL_SUFFIXES = Object.values(SUFFIXES);
+const CONDITION_SUFFIXES = Array.from(
+  { length: MAX_CONDITION_BUBBLES },
+  (_, index) => [
+    `/chong-cond-${index}-circle`,
+    `/chong-cond-${index}-text`,
+  ],
+).flat();
+
+const ALL_SUFFIXES = [...Object.values(SUFFIXES), ...CONDITION_SUFFIXES];
 
 export function attachmentIds(itemId: string): string[] {
   return ALL_SUFFIXES.map((suffix) => `${itemId}${suffix}`);
@@ -134,7 +150,8 @@ export function buildAttachments(
   tracked: TrackedStats,
   sceneDpi: number,
 ): Item[] {
-  if (!tracked.hp && !tracked.ac) return [];
+  const conditions = stats.conditions.slice(0, MAX_CONDITION_BUBBLES);
+  if (!tracked.hp && !tracked.ac && conditions.length === 0) return [];
 
   const { center, width, height } = getTokenBounds(item, sceneDpi);
   const bottom = center.y + height / 2;
@@ -174,6 +191,32 @@ export function buildAttachments(
     );
   }
 
+  // Conditions run along the top edge, left to right, so they never collide
+  // with the HP and AC bubbles sitting on the bottom one.
+  if (conditions.length > 0) {
+    const top = center.y - height / 2 + DIAMETER / 2 + EDGE_PADDING;
+    const step = DIAMETER + 2;
+    const span = step * (conditions.length - 1);
+    const startX = Math.max(
+      center.x - width / 2 + DIAMETER / 2 + EDGE_PADDING,
+      center.x - span / 2,
+    );
+
+    conditions.forEach((condition, index) => {
+      const expired = condition.duration <= 0;
+      items.push(
+        ...buildBubble(item, {
+          id: `${item.id}/chong-cond-${index}-circle`,
+          textId: `${item.id}/chong-cond-${index}-text`,
+          value: String(condition.duration),
+          fill: expired ? CONDITION_EXPIRED_FILL : CONDITION_FILL,
+          stroke: expired ? CONDITION_EXPIRED_STROKE : CONDITION_STROKE,
+          center: { x: startX + step * index, y: top },
+        }),
+      );
+    });
+  }
+
   return items;
 }
 
@@ -193,6 +236,10 @@ export function attachmentSignature(
     stats.hp,
     stats.extraHp,
     stats.ac,
+    stats.conditions
+      .slice(0, MAX_CONDITION_BUBBLES)
+      .map((condition) => condition.duration)
+      .join(","),
     tracked.hp ? 1 : 0,
     tracked.ac ? 1 : 0,
     item.position.x,

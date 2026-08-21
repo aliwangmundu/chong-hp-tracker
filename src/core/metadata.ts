@@ -29,12 +29,17 @@ const DEFAULT_STATS: TokenStats = {
   ac: "",
   conditions: [],
   resources: [],
+  roll: "",
+  rollNote: "",
   category: DEFAULT_CATEGORY,
   index: UNPLACED_INDEX,
 };
 
 /** Names are free text; a cap keeps one pasted essay from wrecking the card. */
 export const ENTRY_NAME_MAX_LENGTH = 24;
+
+/** Dice expressions and roll notes. Long enough for anything sensible. */
+export const ROLL_TEXT_MAX_LENGTH = 64;
 
 
 /** Tokens this extension tracks: images the players actually push around. */
@@ -113,6 +118,11 @@ function readResources(source: Record<string, unknown>): Resource[] {
   }));
 }
 
+function readFreeText(source: Record<string, unknown>, key: string): string {
+  const value = source[key];
+  return typeof value === "string" ? value.slice(0, ROLL_TEXT_MAX_LENGTH) : "";
+}
+
 function readCategory(source: Record<string, unknown>): Category {
   return source["category"] === "PLAYER" ? "PLAYER" : DEFAULT_CATEGORY;
 }
@@ -138,6 +148,8 @@ export function parseStats(item: Item): TokenStats {
     ac: readText(source, "ac"),
     conditions: readConditions(source),
     resources: readResources(source),
+    roll: readFreeText(source, "roll"),
+    rollNote: readFreeText(source, "rollNote"),
     category: readCategory(source),
     index,
   };

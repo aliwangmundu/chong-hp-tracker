@@ -42,6 +42,17 @@ columns, and a health field you can do arithmetic in.
   card. A condition is a name and a countdown the round drives. A resource is a
   name and a counter only you move — mana, ki, charges, arrows — with `‹ ›`
   either side of it. Both have a small `×` to remove them.
+- **Rolling.** A dice field on the second card: type `1d20 + 3` and press
+  Enter. Full expressions work — `2d6 + 1d4 + 3`, `(1d8 + 2) * 2`, `d20 - 1`.
+  The result lands across the top of the panel as `1d20 (17) + 3 = 20`, with
+  any die on its highest face bolded green (a crit) and any 1 bolded red (a
+  fumble). The expression is remembered on the token, and the note box beneath
+  it labels the roll in the log.
+- **A shared roll log** at the bottom of the card, one line until you click it,
+  then the last 20 rolls newest first. It lives on the scene, so everyone sees
+  the same history and a player who opens the panel late still gets it.
+- **Condition circles on the token.** Up to four along the top edge, each
+  showing that condition's remaining duration, turning red at 0.
 - **Nothing carries between scenes.** Stats live on the token, in the scene
   that token belongs to.
 - **Hide adversaries.** A GM-only switch on the Adversaries heading takes that
@@ -110,7 +121,7 @@ index.html       landing page that prints the install URL
 ```
 
 ```
-src/core/    metadata, inline math, sorting, AC, conditions/resources, settings
+src/core/    metadata, inline math, dice, sorting, AC, entries, settings, rolls
 src/obr/     bounds maths, bubble builders, the sync loop
 src/ui/      the panel
 ```
@@ -136,6 +147,16 @@ src/ui/      the panel
 - **Bubbles key off metadata presence, not value.** A monster knocked to 0 HP
   still shows a `0` bubble; a token nobody has touched shows none. Checking for
   a non-zero value would make dead monsters look untracked.
+- **The roll log is the broadcast channel.** Every client already listens for
+  scene metadata changes, so appending an entry both stores it and delivers it
+  to everyone — no separate message channel, and the banner each player sees is
+  driven by the log rather than their own roll.
+- **The log stores segments, not a finished string.** The bold on a crit has to
+  survive the trip through scene metadata to everyone else, which a rendered
+  line of text could not carry.
+- **Dice use `crypto.getRandomValues`, with rejection sampling.** `% sides` on
+  a raw 32-bit value skews the low faces; the loop discards the short tail
+  instead so every face is equally likely.
 - **Expired conditions are kept, not deleted.** A duration of 0 turns red and
   stays put. The counter's job is counting; deciding an effect has actually
   ended is the GM's call — and keeping the row is what lets stepping the round
@@ -157,6 +178,10 @@ src/ui/      the panel
 - AC allows three characters — `AC_MAX_LENGTH` in `src/core/ac.ts`.
 - Condition and resource names cap at 24 characters —
   `ENTRY_NAME_MAX_LENGTH` in `src/core/metadata.ts`.
+- The log keeps 20 rolls — `ROLL_LOG_LIMIT` in `src/core/rolls.ts`.
+- Four condition circles per token — `MAX_CONDITION_BUBBLES` in
+  `src/obr/attachments.ts`.
+- A roll is capped at 100 dice, d1000 — the limits in `src/core/dice.ts`.
 - HP floors at 0 and is capped by max HP once one is set; a max of 0 means no
   cap — `clampHp` in `src/core/inlineMath.ts`.
 

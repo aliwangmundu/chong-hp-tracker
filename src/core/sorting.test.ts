@@ -19,6 +19,8 @@ const token = (
     ac: "12",
     conditions: [],
     resources: [],
+    roll: "",
+    rollNote: "",
     category,
     index,
   },

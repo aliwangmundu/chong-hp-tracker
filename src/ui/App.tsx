@@ -25,7 +25,13 @@ import {
   writeStats,
   writeStatsBatch,
 } from "@/core/metadata";
-import { stepDurations } from "@/core/entries";
+import { rollExpression } from "@/core/dice";
+import { newEntryId, stepDurations } from "@/core/entries";
+import {
+  type RollLogEntry,
+  appendRoll,
+  parseRollLog,
+} from "@/core/rolls";
 import {
   FIRST_ROUND,
   parseSettings,
@@ -43,6 +49,7 @@ import {
 } from "@/core/types";
 import CategorySection, { categoryFromDroppableId } from "./CategorySection";
 import HideToggle from "./HideToggle";
+import RollBanner from "./RollBanner";
 import RoundBar from "./RoundBar";
 import TokenDrawer, { DETAIL_WIDTH } from "./TokenDrawer";
 
@@ -56,6 +63,9 @@ import TokenDrawer, { DETAIL_WIDTH } from "./TokenDrawer";
  */
 const PANEL_WIDTH = 288;
 
+/** How long a roll banner stays up before it gets out of the way. */
+const BANNER_MS = 6000;
+
 export default function App() {
   const [tokens, setTokens] = useState<TrackedToken[]>([]);
   const [selection, setSelection] = useState<string[]>([]);
@@ -63,6 +73,10 @@ export default function App() {
   const [isGm, setIsGm] = useState(false);
   const [adversariesHidden, setAdversariesHidden] = useState(false);
   const [round, setRoundState] = useState(FIRST_ROUND);
+  const [log, setLog] = useState<RollLogEntry[]>([]);
+  const [bannerId, setBannerId] = useState<string | null>(null);
+  const [rollError, setRollError] = useState<string | null>(null);
+  const [playerName, setPlayerName] = useState("");
   const [detailsFor, setDetailsFor] = useState<string | null>(null);
   /** Set while a drag is being written, so the scene echo cannot flicker. */
   const [pendingGroups, setPendingGroups] = useState<GroupedTokens | null>(null);
@@ -97,9 +111,11 @@ export default function App() {
   useEffect(() => {
     void OBR.player.getSelection().then((ids) => setSelection(ids ?? []));
     void OBR.player.getRole().then((role) => setIsGm(role === "GM"));
+    void OBR.player.getName().then(setPlayerName);
     return OBR.player.onChange((player) => {
       setSelection(player.selection ?? []);
       setIsGm(player.role === "GM");
+      setPlayerName(player.name);
     });
   }, []);
 
@@ -110,6 +126,7 @@ export default function App() {
       const settings = parseSettings(metadata);
       setAdversariesHidden(settings.hideAdversaries);
       setRoundState(settings.round);
+      setLog(parseRollLog(metadata));
     };
     void OBR.scene.getMetadata().then(apply);
     return OBR.scene.onMetadataChange(apply);
@@ -233,6 +250,68 @@ export default function App() {
     [round, tokens],
   );
 
+  /**
+   * Show the banner for whatever landed in the shared log last.
+   *
+   * Driving it from the log rather than the local roll is what makes everyone
+   * in the room see the same result — scene metadata is already the broadcast
+   * channel, so no separate message is needed.
+   */
+  const newestRollId = log[log.length - 1]?.id ?? null;
+  const [seenRollId, setSeenRollId] = useState<string | null>(null);
+  useEffect(() => {
+    if (newestRollId === null) return;
+    if (newestRollId === seenRollId) return;
+    setSeenRollId(newestRollId);
+    // Nothing to show on the first load: only rolls made from here on.
+    if (seenRollId !== null) setBannerId(newestRollId);
+  }, [newestRollId, seenRollId]);
+
+  // The banner is a passing announcement, not a panel.
+  useEffect(() => {
+    if (bannerId === null) return;
+    const timer = window.setTimeout(() => setBannerId(null), BANNER_MS);
+    return () => window.clearTimeout(timer);
+  }, [bannerId]);
+
+  const bannerEntry = useMemo(
+    () => log.find((entry) => entry.id === bannerId) ?? null,
+    [bannerId, log],
+  );
+
+  const handleRollTextChange = useCallback(
+    (id: string, field: "roll" | "rollNote", next: string) => {
+      setRollError(null);
+      patchToken(id, field === "roll" ? { roll: next } : { rollNote: next });
+    },
+    [patchToken],
+  );
+
+  const handleRoll = useCallback(
+    (id: string, expression: string) => {
+      const token = tokens.find((candidate) => candidate.id === id);
+      const result = rollExpression(expression);
+
+      if (!result.ok) {
+        setRollError(result.error);
+        return;
+      }
+      setRollError(null);
+
+      void appendRoll({
+        id: newEntryId(),
+        who: playerName,
+        token: token?.name ?? "",
+        note: token?.stats.rollNote ?? "",
+        segments: result.segments,
+        total: result.total,
+        crit: result.crit,
+        fumble: result.fumble,
+      });
+    },
+    [playerName, tokens],
+  );
+
   const handleAcChange = useCallback((id: string, value: string) => {
     setTokens((current) =>
       current.map((token) =>
@@ -346,7 +425,11 @@ export default function App() {
   );
 
   return (
-    <div className="app-surface flex h-full overflow-hidden">
+    <div className="app-surface relative flex h-full overflow-hidden">
+      {bannerEntry !== null && (
+        <RollBanner entry={bannerEntry} onDismiss={() => setBannerId(null)} />
+      )}
+
       <div
         className="flex h-full shrink-0 flex-col"
         style={{ width: PANEL_WIDTH }}
@@ -402,6 +485,10 @@ export default function App() {
           onStatChange={handleStatChange}
           onConditionsChange={handleConditionsChange}
           onResourcesChange={handleResourcesChange}
+          onRollTextChange={handleRollTextChange}
+          onRoll={handleRoll}
+          rollError={rollError}
+          log={log}
         />
       )}
     </div>
