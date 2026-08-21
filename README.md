@@ -44,9 +44,10 @@ columns, and a health field you can do arithmetic in.
   either side of it. Both have a small `×` to remove them.
 - **Rolling.** A dice field on the second card: type `1d20 + 3` and press
   Enter. Full expressions work — `2d6 + 1d4 + 3`, `(1d8 + 2) * 2`, `d20 - 1`.
-  The result lands across the top of the panel as `1d20 (17) + 3 = 20`, with
-  any die on its highest face bolded green (a crit) and any 1 bolded red (a
-  fumble). The expression is remembered on the token, and the note box beneath
+  The result floats over the map at the top centre of the screen as
+  `1d20 (17) + 3 = 20`, with any die on its highest face bolded green (a crit)
+  and any 1 bolded red (a fumble). Everyone in the room sees it, whether or not
+  they have the panel open. The expression is remembered on the token, and the note box beneath
   it labels the roll in the log.
 - **A shared roll log** at the bottom of the card, one line until you click it,
   then the last 20 rolls newest first. It lives on the scene, so everyone sees
@@ -147,6 +148,15 @@ src/ui/      the panel
 - **Bubbles key off metadata presence, not value.** A monster knocked to 0 HP
   still shows a `0` bubble; a token nobody has touched shows none. Checking for
   a non-zero value would make dead monsters look untracked.
+- **The floating result is a popover, not part of the panel.** An extension
+  gets no drawing surface over the map, but `OBR.popover.open` with
+  `anchorReference: "POSITION"` takes screen coordinates, and `hidePaper: true`
+  drops Owlbear's frame — which together make a free-floating card. It is
+  opened from the background script, so it shows for everyone in the room
+  regardless of whether their panel is open.
+- **The popover reads the log rather than being passed a roll.** It needs no
+  message channel that way: whoever opened it, every client renders the same
+  newest entry.
 - **The roll log is the broadcast channel.** Every client already listens for
   scene metadata changes, so appending an entry both stores it and delivers it
   to everyone — no separate message channel, and the banner each player sees is

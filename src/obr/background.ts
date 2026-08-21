@@ -1,6 +1,7 @@
 import OBR, { type Image, type Item } from "@owlbear-rodeo/sdk";
 import { getPluginId } from "@/core/pluginId";
 import { getTrackedStats, isTrackableItem, parseStats } from "@/core/metadata";
+import { resetRollPopover, watchRolls } from "./rollPopover";
 import {
   attachmentIds,
   attachmentSignature,
@@ -80,6 +81,8 @@ async function start(): Promise<void> {
   sceneDpi = await OBR.scene.grid.getDpi();
   await refresh();
 
+  watchRolls();
+
   OBR.scene.items.onChange((items) => {
     void sync(items);
   });
@@ -98,6 +101,7 @@ OBR.onReady(async () => {
     } else {
       running = false;
       drawn.clear();
+      resetRollPopover();
     }
   });
 
