@@ -27,9 +27,9 @@ columns, and a health field you can do arithmetic in.
   `+ - * /` and parentheses work. An expression that will not parse flashes red
   and leaves the value alone rather than committing a wrong number.
 
-- **`+` on each row** opens a second card *beside* the list, widening the
-  popover rather than covering it, so the roster stays visible and usable while
-  you edit. It holds extra HP (temporary hit points, added into the number on
+- **`+` on each row** toggles a second card open *beside* the list, widening
+  the popover rather than covering it, so the roster stays visible and usable
+  while you edit. The same `+` closes it; it highlights while its card is open. It holds extra HP (temporary hit points, added into the number on
   the token) and max HP (caps the HP field, never drawn on the map). Both are
   plain number fields — arithmetic entry is for HP only, where "-25" is what
   you actually mean.
@@ -110,10 +110,10 @@ src/ui/      the panel
   list alone; opening a token's extra stats calls `OBR.action.setWidth` to grow
   the window by exactly the second card's width. `PANEL_WIDTH` in
   `src/ui/App.tsx` must stay in step with `action.width` in the manifest.
-- **Open and close are sequenced, not simultaneous.** `setWidth` snaps — there
-  is no animated form of it — so opening widens the window first and then
-  slides the card into the space that appeared, and closing slides the card
-  away before shrinking. Doing either in the other order looks like a teleport.
+- **No transition on the second card.** `setWidth` snaps, with no animated
+  form, so a card animating against a window that cannot animate with it reads
+  as jitter rather than motion. The card appears in one frame instead, and the
+  list is pinned to `PANEL_WIDTH` so it does not shift by a pixel either way.
 
 - **Attachments are local items.** Each client draws its own bubbles from the
   shared token metadata, so the scene file stays clean, undo history is not

@@ -11,7 +11,8 @@ type Props = {
   selected: boolean;
   onStatChange: (id: string, key: NumericStatKey, value: number) => void;
   onAcChange: (id: string, value: string) => void;
-  onOpenDetails: (id: string) => void;
+  onToggleDetails: (id: string) => void;
+  detailsOpen: boolean;
 };
 
 /**
@@ -49,7 +50,8 @@ export default function TokenRow({
   selected,
   onStatChange,
   onAcChange,
-  onOpenDetails,
+  onToggleDetails,
+  detailsOpen,
 }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: token.id });
@@ -116,15 +118,16 @@ export default function TokenRow({
 
       <button
         type="button"
-        aria-label={`More stats for ${token.name}`}
+        aria-label={`Extra stats for ${token.name}`}
+        aria-expanded={detailsOpen}
         title="Extra HP and max HP"
-        onClick={() => onOpenDetails(token.id)}
+        onClick={() => onToggleDetails(token.id)}
         onPointerDown={(event) => event.stopPropagation()}
         className={[
           "flex size-6 shrink-0 items-center justify-center rounded-md",
-          "text-ink-400 transition-colors",
-          "hover:bg-ink-200 hover:text-ink-800",
-          "dark:text-ink-600 dark:hover:bg-ink-800 dark:hover:text-ink-100",
+          detailsOpen
+            ? "bg-ink-300 text-ink-900 dark:bg-ink-700 dark:text-ink-50"
+            : "text-ink-400 hover:bg-ink-200 hover:text-ink-800 dark:text-ink-600 dark:hover:bg-ink-800 dark:hover:text-ink-100",
         ].join(" ")}
       >
         <svg

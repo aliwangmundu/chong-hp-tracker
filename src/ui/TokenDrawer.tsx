@@ -6,38 +6,26 @@ import StatField from "./StatField";
 /** Extra popover width the second card needs, in pixels. */
 export const DETAIL_WIDTH = 220;
 
-/** Keep in step with the transition duration on the card. */
-export const DETAIL_TRANSITION_MS = 200;
-
 type Props = {
   token: TrackedToken;
-  /** False for the frame it mounts on and while it is leaving. */
-  shown: boolean;
-  onClose: () => void;
   onStatChange: (id: string, key: NumericStatKey, value: number) => void;
 };
 
 /**
  * A second card that opens beside the list rather than on top of it.
  *
- * App widens the Owlbear popover by exactly this card's width, then flips
- * `shown` so the card slides into the space that just appeared. The popover
- * resize itself cannot animate, so the card's own movement is what sells it.
+ * App widens the Owlbear popover by exactly this card's width, so the card
+ * lands in space that did not exist a moment ago and the list never reflows.
+ * No transition: `OBR.action.setWidth` snaps, and animating the card against a
+ * window that cannot animate with it is what read as jitter.
+ *
+ * The `+` on the row is the only control — it opens and closes this card — so
+ * there is no close button here.
  */
-export default function TokenDrawer({
-  token,
-  shown,
-  onClose,
-  onStatChange,
-}: Props) {
+export default function TokenDrawer({ token, onStatChange }: Props) {
   return (
     <div
-      className={[
-        "flex h-full shrink-0 flex-col border-l",
-        "border-ink-200 dark:border-ink-800",
-        "transition-[transform,opacity] duration-200 ease-out",
-        shown ? "translate-x-0 opacity-100" : "translate-x-full opacity-0",
-      ].join(" ")}
+      className="flex h-full shrink-0 flex-col border-l border-ink-200 dark:border-ink-800"
       style={{ width: DETAIL_WIDTH }}
     >
       <header className="flex items-center gap-2 border-b border-ink-200 px-2 py-2 dark:border-ink-800">
@@ -47,28 +35,12 @@ export default function TokenDrawer({
           draggable={false}
           className="drag-none size-6 shrink-0 rounded object-contain"
         />
-        <h2 className="min-w-0 flex-1 truncate text-sm font-medium" title={token.name}>
+        <h2
+          className="min-w-0 flex-1 truncate text-sm font-medium"
+          title={token.name}
+        >
           {token.name || "Unnamed"}
         </h2>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close extra stats"
-          className="flex size-6 shrink-0 items-center justify-center rounded-md text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-800 dark:text-ink-400 dark:hover:bg-ink-900 dark:hover:text-ink-100"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.25"
-            strokeLinecap="round"
-            aria-hidden
-          >
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        </button>
       </header>
 
       <div className="flex-1 overflow-y-auto px-3 py-3">

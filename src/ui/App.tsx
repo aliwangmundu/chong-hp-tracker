@@ -34,10 +34,7 @@ import {
 } from "@/core/types";
 import CategorySection, { categoryFromDroppableId } from "./CategorySection";
 import HideToggle from "./HideToggle";
-import TokenDrawer, {
-  DETAIL_TRANSITION_MS,
-  DETAIL_WIDTH,
-} from "./TokenDrawer";
+import TokenDrawer, { DETAIL_WIDTH } from "./TokenDrawer";
 
 /**
  * Popover width with only the token list showing.
@@ -179,55 +176,26 @@ export default function App() {
     [detailsFor, tokens],
   );
 
-  const wantDetails = detailsToken !== null;
-  /** The card is in the tree — stays true through the closing animation. */
-  const [detailsMounted, setDetailsMounted] = useState(false);
-  /** The card is in its resting position. Drives the slide. */
-  const [detailsShown, setDetailsShown] = useState(false);
+  const detailsOpen = detailsToken !== null;
 
   /**
-   * Grow the popover instead of covering the list, and sequence the two so the
-   * card appears to slide.
+   * Grow the popover rather than covering the list.
    *
-   * `OBR.action.setWidth` snaps — there is no animated form of it. So on the
-   * way in the window widens first and the card slides into the space that
-   * just appeared; on the way out the card slides away first and the window
-   * only shrinks once it has gone. Doing either in the other order is what
-   * makes it look like it teleports.
+   * Owlbear sizes the popover from the manifest, but an extension can resize
+   * its own. Widening by exactly the card's width puts the second window
+   * beside the first, and pinning the list to PANEL_WIDTH below means it does
+   * not reflow by a single pixel when that happens.
    */
   useEffect(() => {
-    if (wantDetails) {
-      setDetailsMounted(true);
-      void OBR.action.setWidth(PANEL_WIDTH + DETAIL_WIDTH);
+    void OBR.action.setWidth(
+      detailsOpen ? PANEL_WIDTH + DETAIL_WIDTH : PANEL_WIDTH,
+    );
+  }, [detailsOpen]);
 
-      // Two frames: one for React to paint the off-screen start position,
-      // one to flip to the resting position so the transition actually runs.
-      let inner = 0;
-      const outer = requestAnimationFrame(() => {
-        inner = requestAnimationFrame(() => setDetailsShown(true));
-      });
-      return () => {
-        cancelAnimationFrame(outer);
-        cancelAnimationFrame(inner);
-      };
-    }
-
-    setDetailsShown(false);
-    const timer = window.setTimeout(() => {
-      setDetailsMounted(false);
-      void OBR.action.setWidth(PANEL_WIDTH);
-    }, DETAIL_TRANSITION_MS);
-    return () => window.clearTimeout(timer);
-  }, [wantDetails]);
-
-  // Held over so the card keeps its content while it slides away.
-  const [lastDetailsToken, setLastDetailsToken] = useState<TrackedToken | null>(
-    null,
-  );
-  useEffect(() => {
-    if (detailsToken !== null) setLastDetailsToken(detailsToken);
-  }, [detailsToken]);
-  const cardToken = detailsToken ?? lastDetailsToken;
+  /** The row's `+` is a toggle: same token closes, a different one switches. */
+  const toggleDetails = useCallback((id: string) => {
+    setDetailsFor((current) => (current === id ? null : id));
+  }, []);
 
   // The token was deleted from the scene while its card was open.
   useEffect(() => {
@@ -305,7 +273,10 @@ export default function App() {
 
   return (
     <div className="app-surface flex h-full overflow-hidden">
-      <main className="h-full min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">
+      <main
+        className="h-full shrink-0 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1"
+        style={{ width: PANEL_WIDTH }}
+      >
         {!sceneReady ? (
           <Placeholder>Open a scene to start tracking.</Placeholder>
         ) : visibleTokenCount === 0 ? (
@@ -327,7 +298,8 @@ export default function App() {
                 selection={selection}
                 onStatChange={handleStatChange}
                 onAcChange={handleAcChange}
-                onOpenDetails={setDetailsFor}
+                onToggleDetails={toggleDetails}
+                openDetailsId={detailsFor}
                 headerAction={
                   category === "ADVERSARY" && isGm ? (
                     <HideToggle
@@ -342,13 +314,8 @@ export default function App() {
         )}
       </main>
 
-      {detailsMounted && cardToken !== null && (
-        <TokenDrawer
-          token={cardToken}
-          shown={detailsShown}
-          onClose={() => setDetailsFor(null)}
-          onStatChange={handleStatChange}
-        />
+      {detailsToken !== null && (
+        <TokenDrawer token={detailsToken} onStatChange={handleStatChange} />
       )}
     </div>
   );

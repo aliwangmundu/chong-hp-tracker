@@ -23,7 +23,8 @@ type Props = {
   selection: string[];
   onStatChange: (id: string, key: NumericStatKey, value: number) => void;
   onAcChange: (id: string, value: string) => void;
-  onOpenDetails: (id: string) => void;
+  onToggleDetails: (id: string) => void;
+  openDetailsId: string | null;
   /** Optional control pinned to the right of the section heading. */
   headerAction?: ReactNode;
 };
@@ -34,7 +35,8 @@ export default function CategorySection({
   selection,
   onStatChange,
   onAcChange,
-  onOpenDetails,
+  onToggleDetails,
+  openDetailsId,
   headerAction,
 }: Props) {
   // The section itself is a drop target so an empty category still accepts a
@@ -77,7 +79,8 @@ export default function CategorySection({
                 selected={selection.includes(token.id)}
                 onStatChange={onStatChange}
                 onAcChange={onAcChange}
-                onOpenDetails={onOpenDetails}
+                onToggleDetails={onToggleDetails}
+                detailsOpen={openDetailsId === token.id}
               />
             ))
           )}
