@@ -1,7 +1,11 @@
 import OBR, { type Image, type Item } from "@owlbear-rodeo/sdk";
 import { getPluginId } from "@/core/pluginId";
 import { getTrackedStats, isTrackableItem, parseStats } from "@/core/metadata";
-import { resetRollPopover, watchRolls } from "./rollPopover";
+import {
+  initRollPopover,
+  resetRollPopover,
+  watchRolls,
+} from "./rollPopover";
 import {
   attachmentIds,
   attachmentSignature,
@@ -95,6 +99,8 @@ async function start(): Promise<void> {
 }
 
 OBR.onReady(async () => {
+  initRollPopover();
+
   OBR.scene.onReadyChange((ready) => {
     if (ready) {
       void start();

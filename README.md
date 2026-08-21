@@ -45,12 +45,14 @@ columns, and a health field you can do arithmetic in.
 - **Saved rolls.** Each token keeps a list: a label and an expression, with a
   Roll button. Add as many as you like. Full expressions work — `1d20 + 3`,
   `2d6 + 1d4 + 3`, `(1d8 + 2) * 2`, `d20 - 1`.
-- **A dice card floats over the map**, top centre, with two tabs. **Result**
-  shows the newest roll as `1d20 (17) + 3 = 20`, any die on its highest face
-  bolded green (a crit) and any 1 bolded red (a fumble). **Log** holds the last
-  20, newest first. It opens on every roll and for everyone in the room,
-  whether or not they have the tracker open; the dice button beside the round
-  counter reopens it.
+- **A dice card floats over the map** — top right by default, one feed with the
+  last 20 rolls oldest-first and the newest given room at the bottom, shown as
+  `1d20 (17) + 3 = 20` with any die on its highest face bolded green (a crit)
+  and any 1 bolded red (a fumble). It appears on every roll for everyone in the
+  room, whether or not they have the tracker open, and hides itself after five
+  seconds. **Pin** keeps it up while you read; **move** cycles it round the four
+  corners and remembers where you put it. The dice button beside the round
+  counter brings it back.
 - **Condition circles on the token.** Up to four along the top edge, each
   showing that condition's remaining duration, turning red at 0.
 - **Nothing carries between scenes.** Stats live on the token, in the scene
@@ -154,8 +156,17 @@ src/ui/      the panel
   opened from the background script, so it shows for everyone in the room
   regardless of whether their panel is open.
 - **The popover reads the log rather than being passed a roll.** It needs no
-  message channel that way: whoever opened it, every client renders the same
-  newest entry.
+  message channel for content: whoever rolled, every client renders the same
+  feed.
+- **One owner for the card.** Only the background script opens, closes and
+  times it; the panel and the card itself send requests down a local broadcast
+  channel. Two components with their own auto-hide timers would race, and a
+  pinned card would get closed by the timer nobody was tracking.
+- **Moving means closing and reopening.** The popover API has `setWidth` and
+  `setHeight` but no `setPosition`, so free dragging would flicker on every
+  frame. Cycling the four corners costs one reposition per click instead, and
+  the choice is kept in `localStorage` — same origin for the background script
+  and the card, which is what lets the card move itself.
 - **The roll log is the broadcast channel.** Every client already listens for
   scene metadata changes, so appending an entry both stores it and delivers it
   to everyone — no separate message channel, and the banner each player sees is

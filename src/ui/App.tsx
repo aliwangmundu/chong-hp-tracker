@@ -27,7 +27,7 @@ import {
 } from "@/core/metadata";
 import { rollExpression } from "@/core/dice";
 import { newEntryId, stepDurations } from "@/core/entries";
-import { appendRoll } from "@/core/rolls";
+import { ROLL_CONTROL_CHANNEL, appendRoll } from "@/core/rolls";
 import {
   FIRST_ROUND,
   parseSettings,
@@ -47,7 +47,6 @@ import {
 import CategorySection, { categoryFromDroppableId } from "./CategorySection";
 import HideToggle from "./HideToggle";
 import RoundBar from "./RoundBar";
-import { openRollPanel } from "@/obr/rollPopover";
 import TokenDrawer, { DETAIL_WIDTH } from "./TokenDrawer";
 
 /**
@@ -59,6 +58,15 @@ import TokenDrawer, { DETAIL_WIDTH } from "./TokenDrawer";
  * card is closed.
  */
 const PANEL_WIDTH = 288;
+
+/** The background script owns the dice card; the panel only asks for it. */
+function showRollPanel(): void {
+  void OBR.broadcast.sendMessage(
+    ROLL_CONTROL_CHANNEL,
+    { kind: "show" },
+    { destination: "LOCAL" },
+  );
+}
 
 export default function App() {
   const [tokens, setTokens] = useState<TrackedToken[]>([]);
@@ -260,9 +268,9 @@ export default function App() {
       }
       setRollError(null);
 
-      // Open it here as well as from the background script: the roller should
-      // see their result immediately rather than waiting for the scene echo.
-      void openRollPanel();
+      // Ask our own background script to show the card now, rather than
+      // waiting for the scene write to echo back to us.
+      void showRollPanel();
       void appendRoll({
         id: newEntryId(),
         who: playerName,
@@ -399,7 +407,7 @@ export default function App() {
           round={round}
           onStep={stepRound}
           canStepBack={round > FIRST_ROUND}
-          onShowRolls={() => void openRollPanel()}
+          onShowRolls={showRollPanel}
         />
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">

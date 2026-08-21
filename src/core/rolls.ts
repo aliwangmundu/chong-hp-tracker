@@ -7,6 +7,70 @@ export const ROLL_LOG_KEY = getPluginId("rolls");
 /** Shared by the background script, the panel and the popover page itself. */
 export const ROLL_POPOVER_ID = getPluginId("roll-popover");
 
+/**
+ * Local control channel for the dice card.
+ *
+ * Only the background script opens, closes and times the popover — the panel
+ * and the card itself ask for changes through here. One owner means the
+ * auto-hide timer cannot be racing a second one somewhere else.
+ */
+export const ROLL_CONTROL_CHANNEL = getPluginId("roll-control");
+
+export type RollCorner =
+  | "TOP_RIGHT"
+  | "TOP_LEFT"
+  | "BOTTOM_RIGHT"
+  | "BOTTOM_LEFT";
+
+export const CORNER_ORDER: readonly RollCorner[] = [
+  "TOP_RIGHT",
+  "BOTTOM_RIGHT",
+  "BOTTOM_LEFT",
+  "TOP_LEFT",
+] as const;
+
+export const CORNER_LABEL: Record<RollCorner, string> = {
+  TOP_RIGHT: "top right",
+  BOTTOM_RIGHT: "bottom right",
+  BOTTOM_LEFT: "bottom left",
+  TOP_LEFT: "top left",
+};
+
+export const DEFAULT_CORNER: RollCorner = "TOP_RIGHT";
+
+/**
+ * Where the card sits, per person rather than per room.
+ *
+ * The popover page and the background script are the same origin, so this one
+ * key is visible to both — which is what lets the card move itself.
+ */
+const CORNER_STORAGE_KEY = "chong-hp-tracker/roll-corner";
+
+export function readCorner(): RollCorner {
+  try {
+    const stored = window.localStorage.getItem(CORNER_STORAGE_KEY);
+    return CORNER_ORDER.includes(stored as RollCorner)
+      ? (stored as RollCorner)
+      : DEFAULT_CORNER;
+  } catch {
+    // Private windows and blocked site data throw rather than return null.
+    return DEFAULT_CORNER;
+  }
+}
+
+export function writeCorner(corner: RollCorner): void {
+  try {
+    window.localStorage.setItem(CORNER_STORAGE_KEY, corner);
+  } catch {
+    // Not being able to remember the corner is not worth failing over.
+  }
+}
+
+export type RollControlMessage =
+  | { kind: "show" }
+  | { kind: "move"; corner: RollCorner }
+  | { kind: "pin"; pinned: boolean };
+
 /** How many rolls the shared log keeps. Oldest fall off the end. */
 export const ROLL_LOG_LIMIT = 20;
 
