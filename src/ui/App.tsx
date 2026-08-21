@@ -25,15 +25,25 @@ import {
   writeStats,
   writeStatsBatch,
 } from "@/core/metadata";
-import { parseSettings, setHideAdversaries } from "@/core/settings";
+import { stepDurations } from "@/core/entries";
+import {
+  FIRST_ROUND,
+  parseSettings,
+  setHideAdversaries,
+  setRound,
+} from "@/core/settings";
 import { type GroupedTokens, groupByCategory, moveToken } from "@/core/sorting";
 import {
   CATEGORIES,
+  type Condition,
   type NumericStatKey,
+  type Resource,
+  type TokenStats,
   type TrackedToken,
 } from "@/core/types";
 import CategorySection, { categoryFromDroppableId } from "./CategorySection";
 import HideToggle from "./HideToggle";
+import RoundBar from "./RoundBar";
 import TokenDrawer, { DETAIL_WIDTH } from "./TokenDrawer";
 
 /**
@@ -52,6 +62,7 @@ export default function App() {
   const [sceneReady, setSceneReady] = useState(false);
   const [isGm, setIsGm] = useState(false);
   const [adversariesHidden, setAdversariesHidden] = useState(false);
+  const [round, setRoundState] = useState(FIRST_ROUND);
   const [detailsFor, setDetailsFor] = useState<string | null>(null);
   /** Set while a drag is being written, so the scene echo cannot flicker. */
   const [pendingGroups, setPendingGroups] = useState<GroupedTokens | null>(null);
@@ -96,7 +107,9 @@ export default function App() {
   useEffect(() => {
     if (!sceneReady) return;
     const apply = (metadata: Metadata) => {
-      setAdversariesHidden(parseSettings(metadata).hideAdversaries);
+      const settings = parseSettings(metadata);
+      setAdversariesHidden(settings.hideAdversaries);
+      setRoundState(settings.round);
     };
     void OBR.scene.getMetadata().then(apply);
     return OBR.scene.onMetadataChange(apply);
@@ -157,6 +170,67 @@ export default function App() {
       void writeStats(id, statPatch(key, value));
     },
     [],
+  );
+
+  /** Optimistic list edit plus the scene write, shared by both entry lists. */
+  const patchToken = useCallback(
+    (id: string, patch: Partial<TokenStats>) => {
+      setTokens((current) =>
+        current.map((token) =>
+          token.id === id
+            ? { ...token, stats: { ...token.stats, ...patch } }
+            : token,
+        ),
+      );
+      void writeStats(id, patch);
+    },
+    [],
+  );
+
+  const handleConditionsChange = useCallback(
+    (id: string, conditions: Condition[]) => patchToken(id, { conditions }),
+    [patchToken],
+  );
+
+  const handleResourcesChange = useCallback(
+    (id: string, resources: Resource[]) => patchToken(id, { resources }),
+    [patchToken],
+  );
+
+  /**
+   * Advancing the round counts every condition in the scene down by one.
+   *
+   * Stepping back counts them up again, so the two arrows undo each other and
+   * a mis-click costs nothing. Every affected token goes in one batch write:
+   * one undo step, one round trip.
+   */
+  const stepRound = useCallback(
+    (delta: 1 | -1) => {
+      const next = Math.max(FIRST_ROUND, round + delta);
+      if (next === round) return;
+
+      const patches = new Map<string, Partial<TokenStats>>();
+      for (const token of tokens) {
+        if (token.stats.conditions.length === 0) continue;
+        patches.set(token.id, {
+          conditions: stepDurations(token.stats.conditions, -delta),
+        });
+      }
+
+      setRoundState(next); // optimistic; the scene echo confirms it
+      setTokens((current) =>
+        current.map((token) => {
+          const patch = patches.get(token.id);
+          return patch === undefined
+            ? token
+            : { ...token, stats: { ...token.stats, ...patch } };
+        }),
+      );
+
+      void writeStatsBatch(patches);
+      void setRound(next).catch(() => setRoundState(round));
+    },
+    [round, tokens],
   );
 
   const handleAcChange = useCallback((id: string, value: string) => {
@@ -273,49 +347,62 @@ export default function App() {
 
   return (
     <div className="app-surface flex h-full overflow-hidden">
-      <main
-        className="h-full shrink-0 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1"
+      <div
+        className="flex h-full shrink-0 flex-col"
         style={{ width: PANEL_WIDTH }}
       >
-        {!sceneReady ? (
-          <Placeholder>Open a scene to start tracking.</Placeholder>
-        ) : visibleTokenCount === 0 ? (
-          <Placeholder>
-            Drop a token on the map and it will show up here.
-          </Placeholder>
-        ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={collisionDetection}
-            modifiers={[restrictToFirstScrollableAncestor]}
-            onDragEnd={handleDragEnd}
-          >
-            {visibleCategories.map((category) => (
-              <CategorySection
-                key={category}
-                category={category}
-                tokens={groups[category]}
-                selection={selection}
-                onStatChange={handleStatChange}
-                onAcChange={handleAcChange}
-                onToggleDetails={toggleDetails}
-                openDetailsId={detailsFor}
-                headerAction={
-                  category === "ADVERSARY" && isGm ? (
-                    <HideToggle
-                      hidden={adversariesHidden}
-                      onToggle={toggleAdversariesHidden}
-                    />
-                  ) : undefined
-                }
-              />
-            ))}
-          </DndContext>
-        )}
-      </main>
+        <RoundBar
+          round={round}
+          onStep={stepRound}
+          canStepBack={round > FIRST_ROUND}
+        />
+
+        <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">
+          {!sceneReady ? (
+            <Placeholder>Open a scene to start tracking.</Placeholder>
+          ) : visibleTokenCount === 0 ? (
+            <Placeholder>
+              Drop a token on the map and it will show up here.
+            </Placeholder>
+          ) : (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={collisionDetection}
+              modifiers={[restrictToFirstScrollableAncestor]}
+              onDragEnd={handleDragEnd}
+            >
+              {visibleCategories.map((category) => (
+                <CategorySection
+                  key={category}
+                  category={category}
+                  tokens={groups[category]}
+                  selection={selection}
+                  onStatChange={handleStatChange}
+                  onAcChange={handleAcChange}
+                  onToggleDetails={toggleDetails}
+                  openDetailsId={detailsFor}
+                  headerAction={
+                    category === "ADVERSARY" && isGm ? (
+                      <HideToggle
+                        hidden={adversariesHidden}
+                        onToggle={toggleAdversariesHidden}
+                      />
+                    ) : undefined
+                  }
+                />
+              ))}
+            </DndContext>
+          )}
+        </main>
+      </div>
 
       {detailsToken !== null && (
-        <TokenDrawer token={detailsToken} onStatChange={handleStatChange} />
+        <TokenDrawer
+          token={detailsToken}
+          onStatChange={handleStatChange}
+          onConditionsChange={handleConditionsChange}
+          onResourcesChange={handleResourcesChange}
+        />
       )}
     </div>
   );

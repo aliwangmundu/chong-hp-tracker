@@ -11,6 +11,20 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   ADVERSARY: "Adversaries",
 };
 
+/** A named effect with a countdown the round tracker drives. */
+export type Condition = {
+  id: string;
+  name: string;
+  duration: number;
+};
+
+/** A named counter nothing touches but the person clicking it. */
+export type Resource = {
+  id: string;
+  name: string;
+  value: number;
+};
+
 /** Everything this extension stores on a token. */
 export type TokenStats = {
   hp: number;
@@ -20,6 +34,8 @@ export type TokenStats = {
   maxHp: number;
   /** Free text so "M", "?" or "18" are all valid. */
   ac: string;
+  conditions: Condition[];
+  resources: Resource[];
   category: Category;
   /** Sort position within the token's category. -1 means "not placed yet". */
   index: number;

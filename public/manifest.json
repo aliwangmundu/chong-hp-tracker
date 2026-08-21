@@ -4,7 +4,7 @@
   "manifest_version": 2,
   "author": "Julian",
   "icon": "/icon.svg",
-  "description": "Simple HP and AC tracking with an inline-math health field.",
+  "description": "Simple HP and AC tracking with conditions, resources and a round counter.",
   "background_url": "/background.html",
   "action": {
     "title": "Chong HP Tracker",

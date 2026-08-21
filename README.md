@@ -29,10 +29,21 @@ columns, and a health field you can do arithmetic in.
 
 - **`+` on each row** toggles a second card open *beside* the list, widening
   the popover rather than covering it, so the roster stays visible and usable
-  while you edit. The same `+` closes it; it highlights while its card is open. It holds extra HP (temporary hit points, added into the number on
+  while you edit. The same `+` closes it, and it highlights while its card is
+  open.
+- **On that card:** extra HP (temporary hit points, added into the number on
   the token) and max HP (caps the HP field, never drawn on the map). Both are
   plain number fields — arithmetic entry is for HP only, where "-25" is what
   you actually mean.
+- **A round counter** sits above the token list: `‹ Round 3 ›`. Advancing it
+  counts every condition in the scene down by one; stepping back counts them
+  up, so the two arrows undo each other.
+- **Conditions and resources**, any number of each, below max HP on the second
+  card. A condition is a name and a countdown the round drives. A resource is a
+  name and a counter only you move — mana, ki, charges, arrows — with `‹ ›`
+  either side of it. Both have a small `×` to remove them.
+- **Nothing carries between scenes.** Stats live on the token, in the scene
+  that token belongs to.
 - **Hide adversaries.** A GM-only switch on the Adversaries heading takes that
   list off every player's panel. Bubbles on the tokens are unaffected, so the
   monsters still show their HP and AC on the map — the roster is what gets
@@ -99,7 +110,7 @@ index.html       landing page that prints the install URL
 ```
 
 ```
-src/core/    plugin id, token metadata, inline math, sorting, AC  (no SDK, unit tested)
+src/core/    metadata, inline math, sorting, AC, conditions/resources, settings
 src/obr/     bounds maths, bubble builders, the sync loop
 src/ui/      the panel
 ```
@@ -125,6 +136,16 @@ src/ui/      the panel
 - **Bubbles key off metadata presence, not value.** A monster knocked to 0 HP
   still shows a `0` bubble; a token nobody has touched shows none. Checking for
   a non-zero value would make dead monsters look untracked.
+- **Expired conditions are kept, not deleted.** A duration of 0 turns red and
+  stays put. The counter's job is counting; deciding an effect has actually
+  ended is the GM's call — and keeping the row is what lets stepping the round
+  back restore exactly what stepping forward did.
+- **Stepping the round is one batch write.** It is the only action that edits
+  every token at once, so it goes through `writeStatsBatch`: a single undo step
+  and a single round trip rather than one per token.
+- **Malformed entries are skipped, not fatal.** Another extension or a
+  hand-edited scene can leave junk under our key; `readEntries` drops the bad
+  row instead of letting it take the whole token's stats down.
 - **Token bounds account for image DPI.** An image's pixels are authored at its
   own DPI and scaled by `sceneDpi / image.grid.dpi` before the item's own scale
   applies. Skipping that is why attachments drift on non-standard token art.
@@ -134,6 +155,8 @@ src/ui/      the panel
 - New tokens land in **Adversaries** — `DEFAULT_CATEGORY` in
   `src/core/metadata.ts`.
 - AC allows three characters — `AC_MAX_LENGTH` in `src/core/ac.ts`.
+- Condition and resource names cap at 24 characters —
+  `ENTRY_NAME_MAX_LENGTH` in `src/core/metadata.ts`.
 - HP floors at 0 and is capped by max HP once one is set; a max of 0 means no
   cap — `clampHp` in `src/core/inlineMath.ts`.
 
