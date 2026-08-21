@@ -1,0 +1,10 @@
+# Rebuilt by `npm install` — never commit it.
+node_modules
+
+# Old build directory; the site now builds into docs/, which IS committed
+# because GitHub Pages serves the published site from there.
+dist
+
+.DS_Store
+Thumbs.db
+*.local

@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  /* Owlbear popovers are transparent by default; these back the panel. */
+  .app-surface {
+    @apply bg-ink-50/95 text-ink-900 dark:bg-ink-975/90 dark:text-ink-100;
+  }
+}
+
+@layer utilities {
+  /* Chrome/Safari draw spinners on number inputs; the stat fields are text. */
+  .no-spinner::-webkit-inner-spin-button,
+  .no-spinner::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .drag-none {
+    -webkit-user-drag: none;
+    user-select: none;
+  }
+}

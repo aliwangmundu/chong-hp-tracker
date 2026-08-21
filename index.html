@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chong HP Tracker — Owlbear Rodeo extension</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0; min-height: 100vh; display: grid; place-items: center;
+        background: #181b21; color: #eceef2; padding: 2rem;
+        font: 16px/1.6 Roboto, system-ui, sans-serif;
+      }
+      main { max-width: 34rem; }
+      h1 { font-size: 1.6rem; margin: 0 0 .25rem; letter-spacing: -0.01em; }
+      p.sub { color: #8494ae; margin: 0 0 2rem; }
+      code {
+        display: block; background: #22262f; border: 1px solid #394253;
+        border-radius: .5rem; padding: .75rem 1rem; margin: .5rem 0 1.5rem;
+        font-size: .85rem; overflow-wrap: anywhere;
+      }
+      ul { color: #b0bacb; padding-left: 1.1rem; }
+      li { margin: .3rem 0; }
+      a { color: #b0bacb; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Chong HP Tracker</h1>
+      <p class="sub">A minimal HP and AC tracker for Owlbear Rodeo.</p>
+      <p>Add it to a room with this manifest URL:</p>
+      <code id="manifest-url">…/manifest.json</code>
+      <ul>
+        <li>Every token on the map shows up in the list automatically.</li>
+        <li>Two categories: Players and Adversaries. Drag rows between them.</li>
+        <li>Type <strong>-25</strong>, <strong>+8</strong>, or <strong>-25 + 8</strong> straight into the HP field.</li>
+        <li>HP bar and AC bubble render on the token.</li>
+      </ul>
+      <script>
+        document.getElementById("manifest-url").textContent =
+          new URL("manifest.json", window.location.href).href;
+      </script>
+    </main>
+  </body>
+</html>
