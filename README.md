@@ -42,16 +42,15 @@ columns, and a health field you can do arithmetic in.
   card. A condition is a name and a countdown the round drives. A resource is a
   name and a counter only you move — mana, ki, charges, arrows — with `‹ ›`
   either side of it. Both have a small `×` to remove them.
-- **Rolling.** A dice field on the second card: type `1d20 + 3` and press
-  Enter. Full expressions work — `2d6 + 1d4 + 3`, `(1d8 + 2) * 2`, `d20 - 1`.
-  The result floats over the map at the top centre of the screen as
-  `1d20 (17) + 3 = 20`, with any die on its highest face bolded green (a crit)
-  and any 1 bolded red (a fumble). Everyone in the room sees it, whether or not
-  they have the panel open. The expression is remembered on the token, and the note box beneath
-  it labels the roll in the log.
-- **A shared roll log** at the bottom of the card, one line until you click it,
-  then the last 20 rolls newest first. It lives on the scene, so everyone sees
-  the same history and a player who opens the panel late still gets it.
+- **Saved rolls.** Each token keeps a list: a label and an expression, with a
+  Roll button. Add as many as you like. Full expressions work — `1d20 + 3`,
+  `2d6 + 1d4 + 3`, `(1d8 + 2) * 2`, `d20 - 1`.
+- **A dice card floats over the map**, top centre, with two tabs. **Result**
+  shows the newest roll as `1d20 (17) + 3 = 20`, any die on its highest face
+  bolded green (a crit) and any 1 bolded red (a fumble). **Log** holds the last
+  20, newest first. It opens on every roll and for everyone in the room,
+  whether or not they have the tracker open; the dice button beside the round
+  counter reopens it.
 - **Condition circles on the token.** Up to four along the top edge, each
   showing that condition's remaining duration, turning red at 0.
 - **Nothing carries between scenes.** Stats live on the token, in the scene

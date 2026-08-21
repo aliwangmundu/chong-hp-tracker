@@ -18,6 +18,13 @@ export type Condition = {
   duration: number;
 };
 
+/** A saved dice expression with a name to roll it by. */
+export type RollEntry = {
+  id: string;
+  label: string;
+  expression: string;
+};
+
 /** A named counter nothing touches but the person clicking it. */
 export type Resource = {
   id: string;
@@ -36,10 +43,7 @@ export type TokenStats = {
   ac: string;
   conditions: Condition[];
   resources: Resource[];
-  /** Remembered dice expression, so a character keeps its attack to hand. */
-  roll: string;
-  /** Free note attached to whatever this token rolls next. */
-  rollNote: string;
+  rolls: RollEntry[];
   category: Category;
   /** Sort position within the token's category. -1 means "not placed yet". */
   index: number;

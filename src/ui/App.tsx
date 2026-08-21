@@ -27,11 +27,7 @@ import {
 } from "@/core/metadata";
 import { rollExpression } from "@/core/dice";
 import { newEntryId, stepDurations } from "@/core/entries";
-import {
-  type RollLogEntry,
-  appendRoll,
-  parseRollLog,
-} from "@/core/rolls";
+import { appendRoll } from "@/core/rolls";
 import {
   FIRST_ROUND,
   parseSettings,
@@ -44,12 +40,14 @@ import {
   type Condition,
   type NumericStatKey,
   type Resource,
+  type RollEntry,
   type TokenStats,
   type TrackedToken,
 } from "@/core/types";
 import CategorySection, { categoryFromDroppableId } from "./CategorySection";
 import HideToggle from "./HideToggle";
 import RoundBar from "./RoundBar";
+import { openRollPanel } from "@/obr/rollPopover";
 import TokenDrawer, { DETAIL_WIDTH } from "./TokenDrawer";
 
 /**
@@ -69,7 +67,6 @@ export default function App() {
   const [isGm, setIsGm] = useState(false);
   const [adversariesHidden, setAdversariesHidden] = useState(false);
   const [round, setRoundState] = useState(FIRST_ROUND);
-  const [log, setLog] = useState<RollLogEntry[]>([]);
   const [rollError, setRollError] = useState<string | null>(null);
   const [playerName, setPlayerName] = useState("");
   const [detailsFor, setDetailsFor] = useState<string | null>(null);
@@ -121,7 +118,6 @@ export default function App() {
       const settings = parseSettings(metadata);
       setAdversariesHidden(settings.hideAdversaries);
       setRoundState(settings.round);
-      setLog(parseRollLog(metadata));
     };
     void OBR.scene.getMetadata().then(apply);
     return OBR.scene.onMetadataChange(apply);
@@ -245,18 +241,18 @@ export default function App() {
     [round, tokens],
   );
 
-  const handleRollTextChange = useCallback(
-    (id: string, field: "roll" | "rollNote", next: string) => {
+  const handleRollsChange = useCallback(
+    (id: string, rolls: RollEntry[]) => {
       setRollError(null);
-      patchToken(id, field === "roll" ? { roll: next } : { rollNote: next });
+      patchToken(id, { rolls });
     },
     [patchToken],
   );
 
   const handleRoll = useCallback(
-    (id: string, expression: string) => {
+    (id: string, entry: RollEntry) => {
       const token = tokens.find((candidate) => candidate.id === id);
-      const result = rollExpression(expression);
+      const result = rollExpression(entry.expression);
 
       if (!result.ok) {
         setRollError(result.error);
@@ -264,11 +260,14 @@ export default function App() {
       }
       setRollError(null);
 
+      // Open it here as well as from the background script: the roller should
+      // see their result immediately rather than waiting for the scene echo.
+      void openRollPanel();
       void appendRoll({
         id: newEntryId(),
         who: playerName,
         token: token?.name ?? "",
-        note: token?.stats.rollNote ?? "",
+        label: entry.label,
         segments: result.segments,
         total: result.total,
         crit: result.crit,
@@ -400,6 +399,7 @@ export default function App() {
           round={round}
           onStep={stepRound}
           canStepBack={round > FIRST_ROUND}
+          onShowRolls={() => void openRollPanel()}
         />
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">
@@ -447,10 +447,9 @@ export default function App() {
           onStatChange={handleStatChange}
           onConditionsChange={handleConditionsChange}
           onResourcesChange={handleResourcesChange}
-          onRollTextChange={handleRollTextChange}
+          onRollsChange={handleRollsChange}
           onRoll={handleRoll}
           rollError={rollError}
-          log={log}
         />
       )}
     </div>

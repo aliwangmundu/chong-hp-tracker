@@ -1,23 +1,25 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import OBR, { type Metadata } from "@owlbear-rodeo/sdk";
-import { type RollLogEntry, parseRollLog } from "@/core/rolls";
+import { ROLL_POPOVER_ID, type RollLogEntry, parseRollLog } from "@/core/rolls";
 import RollBreakdown from "../RollBreakdown";
 
+type Tab = "result" | "log";
+
 /**
- * The floating roll result, rendered in its own popover over the map.
+ * The floating dice card: newest result on one tab, the shared log on the
+ * other.
  *
- * The page reads the newest entry from the shared log rather than being handed
- * one, so it needs no message passing: whoever opens the popover, every client
- * shows the same roll.
+ * It reads the log from scene metadata rather than being handed a roll, so it
+ * needs no message channel — whoever opened it, every client renders the same
+ * history. Switching to Log and back is sticky within a session because the
+ * page stays mounted while the popover is open.
  */
 export default function RollPopover() {
-  const [entry, setEntry] = useState<RollLogEntry | null>(null);
+  const [entries, setEntries] = useState<RollLogEntry[]>([]);
+  const [tab, setTab] = useState<Tab>("result");
 
   useEffect(() => {
-    const apply = (metadata: Metadata) => {
-      const log = parseRollLog(metadata);
-      setEntry(log[log.length - 1] ?? null);
-    };
+    const apply = (metadata: Metadata) => setEntries(parseRollLog(metadata));
     void OBR.scene.getMetadata().then(apply);
     return OBR.scene.onMetadataChange(apply);
   }, []);
@@ -30,42 +32,147 @@ export default function RollPopover() {
     return OBR.theme.onChange((theme) => apply(theme.mode));
   }, []);
 
-  if (entry === null) return null;
+  // A fresh roll pulls you back to the result; reading the log mid-combat is
+  // less common than wanting to see what just happened.
+  const newestId = entries[entries.length - 1]?.id;
+  useEffect(() => {
+    if (newestId !== undefined) setTab("result");
+  }, [newestId]);
 
-  const accent = entry.crit
-    ? "border-emerald-400 dark:border-emerald-600"
-    : entry.fumble
-      ? "border-red-400 dark:border-red-700"
-      : "border-ink-300 dark:border-ink-700";
+  const newest = entries[entries.length - 1] ?? null;
 
   return (
     <div
       className={[
-        "mx-auto w-fit max-w-full rounded-xl border-2 px-4 py-2 shadow-xl",
-        "bg-ink-50/95 text-ink-900 backdrop-blur",
-        "dark:bg-ink-975/95 dark:text-ink-100",
-        accent,
+        "flex h-full flex-col overflow-hidden rounded-2xl border shadow-2xl",
+        "border-ink-300 bg-ink-50/95 text-ink-900 backdrop-blur",
+        "dark:border-ink-700 dark:bg-ink-975/95 dark:text-ink-100",
       ].join(" ")}
     >
-      <div className="flex items-baseline justify-center gap-1.5 text-[11px] text-ink-400 dark:text-ink-500">
-        <span className="truncate font-medium text-ink-600 dark:text-ink-300">
-          {entry.token || entry.who || "Roll"}
+      <header className="flex shrink-0 items-center gap-1 border-b border-ink-200 px-1.5 py-1.5 dark:border-ink-800">
+        <TabButton active={tab === "result"} onClick={() => setTab("result")}>
+          Result
+        </TabButton>
+        <TabButton active={tab === "log"} onClick={() => setTab("log")}>
+          Log
+          <span className="ml-1 tabular-nums opacity-60">{entries.length}</span>
+        </TabButton>
+
+        <button
+          type="button"
+          onClick={() => void OBR.popover.close(ROLL_POPOVER_ID)}
+          aria-label="Close"
+          title="Close"
+          className="ml-auto flex size-6 shrink-0 items-center justify-center rounded-md text-ink-400 transition-colors hover:bg-ink-200 hover:text-ink-900 dark:text-ink-500 dark:hover:bg-ink-800 dark:hover:text-ink-50"
+        >
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            aria-hidden
+          >
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </header>
+
+      {tab === "result" ? (
+        <div className="flex flex-1 items-center justify-center overflow-y-auto px-4 py-3">
+          {newest === null ? (
+            <p className="text-sm text-ink-400 dark:text-ink-600">
+              No rolls yet.
+            </p>
+          ) : (
+            <div className="w-full text-center">
+              <Byline entry={newest} center />
+              <div className="mt-1 break-words text-base">
+                <RollBreakdown segments={newest.segments} total={newest.total} />
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <ul className="flex-1 space-y-1.5 overflow-y-auto px-3 py-2">
+          {entries.length === 0 ? (
+            <li className="py-2 text-center text-sm text-ink-400 dark:text-ink-600">
+              No rolls yet.
+            </li>
+          ) : (
+            [...entries].reverse().map((entry) => (
+              <li key={entry.id} className="leading-tight">
+                <Byline entry={entry} />
+                <RollBreakdown
+                  segments={entry.segments}
+                  total={entry.total}
+                  size="xs"
+                />
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={[
+        "rounded-md px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider transition-colors",
+        active
+          ? "bg-ink-200 text-ink-900 dark:bg-ink-800 dark:text-ink-50"
+          : "text-ink-400 hover:text-ink-700 dark:text-ink-500 dark:hover:text-ink-200",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Byline({
+  entry,
+  center = false,
+}: {
+  entry: RollLogEntry;
+  center?: boolean;
+}) {
+  return (
+    <div
+      className={[
+        "flex items-baseline gap-1.5 text-[10px] text-ink-400 dark:text-ink-600",
+        center ? "justify-center" : "",
+      ].join(" ")}
+    >
+      <span className="truncate font-medium text-ink-600 dark:text-ink-300">
+        {entry.token || entry.who || "Roll"}
+      </span>
+      {entry.label !== "" && <span className="truncate">· {entry.label}</span>}
+      {entry.crit && (
+        <span className="shrink-0 font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+          Crit
         </span>
-        {entry.note !== "" && <span className="truncate">· {entry.note}</span>}
-        {entry.crit && (
-          <span className="shrink-0 font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-            Crit
-          </span>
-        )}
-        {entry.fumble && !entry.crit && (
-          <span className="shrink-0 font-semibold uppercase tracking-wider text-red-600 dark:text-red-400">
-            Fumble
-          </span>
-        )}
-      </div>
-      <div className="mt-0.5 whitespace-nowrap text-center">
-        <RollBreakdown segments={entry.segments} total={entry.total} />
-      </div>
+      )}
+      {entry.fumble && !entry.crit && (
+        <span className="shrink-0 font-semibold uppercase tracking-wider text-red-600 dark:text-red-400">
+          Fumble
+        </span>
+      )}
     </div>
   );
 }

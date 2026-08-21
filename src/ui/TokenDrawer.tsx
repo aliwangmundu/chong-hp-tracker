@@ -4,27 +4,25 @@ import type {
   Condition,
   NumericStatKey,
   Resource,
+  RollEntry,
   TrackedToken,
 } from "@/core/types";
-import type { RollLogEntry } from "@/core/rolls";
 import ConditionList from "./ConditionList";
 import ResourceList from "./ResourceList";
-import RollLog from "./RollLog";
-import RollSection from "./RollSection";
+import RollList from "./RollList";
 import StatField from "./StatField";
 
 /** Extra popover width the second card needs, in pixels. */
-export const DETAIL_WIDTH = 280;
+export const DETAIL_WIDTH = 300;
 
 type Props = {
   token: TrackedToken;
   onStatChange: (id: string, key: NumericStatKey, value: number) => void;
   onConditionsChange: (id: string, next: Condition[]) => void;
   onResourcesChange: (id: string, next: Resource[]) => void;
-  onRollTextChange: (id: string, field: "roll" | "rollNote", next: string) => void;
-  onRoll: (id: string, expression: string) => void;
+  onRollsChange: (id: string, next: RollEntry[]) => void;
+  onRoll: (id: string, entry: RollEntry) => void;
   rollError: string | null;
-  log: RollLogEntry[];
 };
 
 /**
@@ -43,10 +41,9 @@ export default function TokenDrawer({
   onStatChange,
   onConditionsChange,
   onResourcesChange,
-  onRollTextChange,
+  onRollsChange,
   onRoll,
   rollError,
-  log,
 }: Props) {
   return (
     <div
@@ -69,31 +66,32 @@ export default function TokenDrawer({
       </header>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
-        <dl className="space-y-2">
-          <Row term="Extra HP">
+        {/* Extra and max share one line — two secondary numbers do not deserve
+            a stacked row each when the card has lists to fit below them. */}
+        <div className="flex items-center gap-2">
+          <InlineStat label="Extra">
             <StatField
               label={`${token.name} extra hit points`}
               value={token.stats.extraHp}
-              widthClass="w-16"
+              widthClass="w-12"
               allowMath={false}
               onCommit={(next) =>
                 onStatChange(token.id, "extraHp", clampExtraHp(next))
               }
             />
-          </Row>
-
-          <Row term="Max HP">
+          </InlineStat>
+          <InlineStat label="Max">
             <StatField
               label={`${token.name} maximum hit points`}
               value={token.stats.maxHp}
-              widthClass="w-16"
+              widthClass="w-12"
               allowMath={false}
               onCommit={(next) =>
                 onStatChange(token.id, "maxHp", clampMaxHp(next))
               }
             />
-          </Row>
-        </dl>
+          </InlineStat>
+        </div>
 
         <ConditionList
           conditions={token.stats.conditions}
@@ -105,26 +103,28 @@ export default function TokenDrawer({
           onChange={(next) => onResourcesChange(token.id, next)}
         />
 
-        <RollSection
-          expression={token.stats.roll}
-          note={token.stats.rollNote}
+        <RollList
+          rolls={token.stats.rolls}
           error={rollError}
-          onExpressionChange={(next) => onRollTextChange(token.id, "roll", next)}
-          onNoteChange={(next) => onRollTextChange(token.id, "rollNote", next)}
-          onRoll={(expression) => onRoll(token.id, expression)}
+          onChange={(next) => onRollsChange(token.id, next)}
+          onRoll={(entry) => onRoll(token.id, entry)}
         />
-
-        <RollLog entries={log} />
       </div>
     </div>
   );
 }
 
-function Row({ term, children }: { term: string; children: ReactNode }) {
+function InlineStat({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <dt className="truncate text-sm">{term}</dt>
-      <dd className="shrink-0">{children}</dd>
+    <div className="flex flex-1 items-center gap-1.5">
+      <span className="text-xs text-ink-500 dark:text-ink-400">{label}</span>
+      {children}
     </div>
   );
 }

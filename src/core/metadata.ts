@@ -6,6 +6,7 @@ import {
   type Condition,
   type NumericStatKey,
   type Resource,
+  type RollEntry,
   type TokenStats,
   type TrackedStats,
   type TrackedToken,
@@ -29,8 +30,7 @@ const DEFAULT_STATS: TokenStats = {
   ac: "",
   conditions: [],
   resources: [],
-  roll: "",
-  rollNote: "",
+  rolls: [],
   category: DEFAULT_CATEGORY,
   index: UNPLACED_INDEX,
 };
@@ -118,9 +118,28 @@ function readResources(source: Record<string, unknown>): Resource[] {
   }));
 }
 
-function readFreeText(source: Record<string, unknown>, key: string): string {
-  const value = source[key];
-  return typeof value === "string" ? value.slice(0, ROLL_TEXT_MAX_LENGTH) : "";
+function readRolls(source: Record<string, unknown>): RollEntry[] {
+  const raw = source["rolls"];
+  if (!Array.isArray(raw)) return [];
+
+  const rolls: RollEntry[] = [];
+  for (const value of raw) {
+    if (typeof value !== "object" || value === null) continue;
+    const entry = value as Record<string, unknown>;
+    if (typeof entry["id"] !== "string") continue;
+    rolls.push({
+      id: entry["id"],
+      label:
+        typeof entry["label"] === "string"
+          ? entry["label"].slice(0, ENTRY_NAME_MAX_LENGTH)
+          : "",
+      expression:
+        typeof entry["expression"] === "string"
+          ? entry["expression"].slice(0, ROLL_TEXT_MAX_LENGTH)
+          : "",
+    });
+  }
+  return rolls;
 }
 
 function readCategory(source: Record<string, unknown>): Category {
@@ -148,8 +167,7 @@ export function parseStats(item: Item): TokenStats {
     ac: readText(source, "ac"),
     conditions: readConditions(source),
     resources: readResources(source),
-    roll: readFreeText(source, "roll"),
-    rollNote: readFreeText(source, "rollNote"),
+    rolls: readRolls(source),
     category: readCategory(source),
     index,
   };

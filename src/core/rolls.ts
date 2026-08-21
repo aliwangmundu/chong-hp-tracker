@@ -4,6 +4,9 @@ import { getPluginId } from "./pluginId";
 
 export const ROLL_LOG_KEY = getPluginId("rolls");
 
+/** Shared by the background script, the panel and the popover page itself. */
+export const ROLL_POPOVER_ID = getPluginId("roll-popover");
+
 /** How many rolls the shared log keeps. Oldest fall off the end. */
 export const ROLL_LOG_LIMIT = 20;
 
@@ -13,8 +16,8 @@ export type RollLogEntry = {
   who: string;
   /** Token the roll was made from. */
   token: string;
-  /** Whatever the player typed in the note box. */
-  note: string;
+  /** The saved roll's label, if it had one. */
+  label: string;
   segments: Segment[];
   total: number;
   crit: boolean;
@@ -76,7 +79,7 @@ export function parseRollLog(metadata: Metadata): RollLogEntry[] {
       id: entry["id"],
       who: typeof entry["who"] === "string" ? entry["who"] : "",
       token: typeof entry["token"] === "string" ? entry["token"] : "",
-      note: typeof entry["note"] === "string" ? entry["note"] : "",
+      label: typeof entry["label"] === "string" ? entry["label"] : "",
       segments: parseSegments(entry["segments"]),
       total: entry["total"],
       crit: entry["crit"] === true,
