@@ -2,6 +2,11 @@ import OBR, { type Image, type Item } from "@owlbear-rodeo/sdk";
 import { getPluginId } from "@/core/pluginId";
 import { getTrackedStats, isTrackableItem, parseStats } from "@/core/metadata";
 import {
+  initPersistence,
+  reconcilePersistence,
+  resetPersistence,
+} from "./persistence";
+import {
   attachmentIds,
   attachmentSignature,
   buildAttachments,
@@ -32,6 +37,10 @@ async function clearLocalAttachments(): Promise<void> {
 
 async function sync(items: Item[]): Promise<void> {
   const tokens = items.filter(isTrackableItem);
+
+  // Ally stats ride along with the scene sync; a restore writes metadata, which
+  // comes back through here and redraws the bubbles.
+  void reconcilePersistence(tokens);
 
   const toAdd: Item[] = [];
   const toDelete: string[] = [];
@@ -92,12 +101,15 @@ async function start(): Promise<void> {
 }
 
 OBR.onReady(async () => {
+  await initPersistence();
+
   OBR.scene.onReadyChange((ready) => {
     if (ready) {
       void start();
     } else {
       running = false;
       drawn.clear();
+      resetPersistence();
     }
   });
 

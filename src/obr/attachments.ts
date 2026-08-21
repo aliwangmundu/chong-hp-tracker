@@ -59,14 +59,14 @@ const DISABLED_BEHAVIORS: AttachmentBehavior[] = [
 type Bubble = {
   id: string;
   textId: string;
-  value: number;
+  value: string;
   fill: string;
   stroke: string;
   center: { x: number; y: number };
 };
 
 function buildBubble(item: Image, bubble: Bubble): Item[] {
-  const label = String(bubble.value);
+  const label = bubble.value;
 
   const circle = buildShape()
     .id(bubble.id)
@@ -151,7 +151,9 @@ export function buildAttachments(
       ...buildBubble(item, {
         id: `${item.id}${SUFFIXES.hpCircle}`,
         textId: `${item.id}${SUFFIXES.hpText}`,
-        value: stats.hp,
+        // Temporary hit points are folded into the number on the map; the panel
+        // is where the split between the two is visible.
+        value: String(stats.hp + stats.extraHp),
         fill: HP_FILL,
         stroke: HP_STROKE,
         center: { x: center.x - halfSpan, y },
@@ -189,6 +191,7 @@ export function attachmentSignature(
 ): string {
   return [
     stats.hp,
+    stats.extraHp,
     stats.ac,
     tracked.hp ? 1 : 0,
     tracked.ac ? 1 : 0,

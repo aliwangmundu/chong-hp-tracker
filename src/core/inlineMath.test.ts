@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  AC_LIMIT,
   HP_LIMIT,
-  clampAc,
+  clampExtraHp,
+  clampMaxHp,
   clampHp,
   evaluateStatInput,
 } from "./inlineMath";
@@ -132,9 +132,9 @@ describe("clamping", () => {
     expect(clampHp(99999)).toBe(HP_LIMIT);
   });
 
-  it("floors and caps AC", () => {
-    expect(clampAc(-5)).toBe(0);
-    expect(clampAc(18)).toBe(18);
-    expect(clampAc(5000)).toBe(AC_LIMIT);
+  it("clamps extra and maximum HP the same way", () => {
+    expect(clampExtraHp(-5)).toBe(0);
+    expect(clampExtraHp(12)).toBe(12);
+    expect(clampMaxHp(99999)).toBe(HP_LIMIT);
   });
 });

@@ -21,9 +21,14 @@ import {
 } from "@/core/metadata";
 import { parseSettings, setHideAdversaries } from "@/core/settings";
 import { type GroupedTokens, groupByCategory, moveToken } from "@/core/sorting";
-import { CATEGORIES, type StatKey, type TrackedToken } from "@/core/types";
+import {
+  CATEGORIES,
+  type NumericStatKey,
+  type TrackedToken,
+} from "@/core/types";
 import CategorySection, { categoryFromDroppableId } from "./CategorySection";
 import HideToggle from "./HideToggle";
+import TokenDrawer from "./TokenDrawer";
 
 export default function App() {
   const [tokens, setTokens] = useState<TrackedToken[]>([]);
@@ -31,6 +36,7 @@ export default function App() {
   const [sceneReady, setSceneReady] = useState(false);
   const [isGm, setIsGm] = useState(false);
   const [adversariesHidden, setAdversariesHidden] = useState(false);
+  const [detailsFor, setDetailsFor] = useState<string | null>(null);
   /** Set while a drag is being written, so the scene echo cannot flicker. */
   const [pendingGroups, setPendingGroups] = useState<GroupedTokens | null>(null);
 
@@ -123,7 +129,7 @@ export default function App() {
   }, [adversariesHidden]);
 
   const handleStatChange = useCallback(
-    (id: string, key: StatKey, value: number) => {
+    (id: string, key: NumericStatKey, value: number) => {
       // Optimistic: the field should settle instantly, not after a round trip.
       setTokens((current) =>
         current.map((token) =>
@@ -135,6 +141,23 @@ export default function App() {
       void writeStats(id, statPatch(key, value));
     },
     [],
+  );
+
+  const handleAcChange = useCallback((id: string, value: string) => {
+    setTokens((current) =>
+      current.map((token) =>
+        token.id === id
+          ? { ...token, stats: { ...token.stats, ac: value } }
+          : token,
+      ),
+    );
+    void writeStats(id, { ac: value });
+  }, []);
+
+  // A token deleted from the scene must not leave its drawer open over nothing.
+  const detailsToken = useMemo(
+    () => tokens.find((token) => token.id === detailsFor) ?? null,
+    [detailsFor, tokens],
   );
 
   /**
@@ -207,11 +230,12 @@ export default function App() {
   );
 
   return (
-    <div className="app-surface flex h-full flex-col">
-      <div className="flex items-center gap-2 px-4 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wider text-ink-400 dark:text-ink-600">
+    <div className="app-surface relative flex h-full flex-col overflow-hidden">
+      <div className="flex items-center gap-1.5 px-3.5 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wider text-ink-400 dark:text-ink-600">
         <span className="flex-1">Token</span>
-        <span className="w-24 text-center">HP</span>
-        <span className="w-14 text-center">AC</span>
+        <span className="w-16 text-center">HP</span>
+        <span className="w-11 text-center">AC</span>
+        <span className="w-6" />
       </div>
 
       <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4">
@@ -235,6 +259,8 @@ export default function App() {
                 tokens={groups[category]}
                 selection={selection}
                 onStatChange={handleStatChange}
+                onAcChange={handleAcChange}
+                onOpenDetails={setDetailsFor}
                 headerAction={
                   category === "ADVERSARY" && isGm ? (
                     <HideToggle
@@ -248,6 +274,12 @@ export default function App() {
           </DndContext>
         )}
       </main>
+
+      <TokenDrawer
+        token={detailsToken}
+        onClose={() => setDetailsFor(null)}
+        onStatChange={handleStatChange}
+      />
     </div>
   );
 }

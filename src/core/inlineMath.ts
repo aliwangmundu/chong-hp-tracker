@@ -232,7 +232,6 @@ export function evaluateStatInput(
 // ---------------------------------------------------------------------------
 
 export const HP_LIMIT = 9999;
-export const AC_LIMIT = 999;
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
@@ -242,6 +241,6 @@ export function clampHp(value: number): number {
   return clamp(value, 0, HP_LIMIT);
 }
 
-export function clampAc(value: number): number {
-  return clamp(value, 0, AC_LIMIT);
-}
+/** Extra and maximum HP share HP's range. */
+export const clampExtraHp = clampHp;
+export const clampMaxHp = clampHp;

@@ -1,8 +1,10 @@
 import OBR, { type Image, type Item, isImage } from "@owlbear-rodeo/sdk";
+import { normalizeAc } from "./ac";
 import { getPluginId } from "./pluginId";
 import {
   type Category,
-  type StatKey,
+  type NumericStatKey,
+  type PortableStats,
   type TokenStats,
   type TrackedStats,
   type TrackedToken,
@@ -21,10 +23,13 @@ export const DEFAULT_CATEGORY: Category = "ADVERSARY";
 
 const DEFAULT_STATS: TokenStats = {
   hp: 0,
-  ac: 0,
+  extraHp: 0,
+  maxHp: 0,
+  ac: "",
   category: DEFAULT_CATEGORY,
   index: UNPLACED_INDEX,
 };
+
 
 /** Tokens this extension tracks: images the players actually push around. */
 export function isTrackableItem(item: Item): item is Image {
@@ -44,6 +49,16 @@ function readInt(source: Record<string, unknown>, key: string): number {
     if (Number.isFinite(parsed)) return parsed;
   }
   return 0;
+}
+
+function readText(source: Record<string, unknown>, key: string): string {
+  const value = source[key];
+  if (typeof value === "string") return normalizeAc(value);
+  // AC used to be numeric; keep those scenes working.
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(Math.trunc(value));
+  }
+  return "";
 }
 
 function readCategory(source: Record<string, unknown>): Category {
@@ -66,9 +81,21 @@ export function parseStats(item: Item): TokenStats {
 
   return {
     hp: readInt(source, "hp"),
-    ac: readInt(source, "ac"),
+    extraHp: readInt(source, "extraHp"),
+    maxHp: readInt(source, "maxHp"),
+    ac: readText(source, "ac"),
     category: readCategory(source),
     index,
+  };
+}
+
+/** The subset that follows an ally from scene to scene. */
+export function portableStats(stats: TokenStats): PortableStats {
+  return {
+    hp: stats.hp,
+    extraHp: stats.extraHp,
+    maxHp: stats.maxHp,
+    ac: stats.ac,
   };
 }
 
@@ -84,7 +111,12 @@ export function getTrackedStats(item: Item): TrackedStats {
   if (typeof raw !== "object" || raw === null) return { hp: false, ac: false };
 
   const source = raw as Record<string, unknown>;
-  return { hp: "hp" in source, ac: "ac" in source };
+  return {
+    // HP shows once set, even at 0 — a dead monster is still being tracked.
+    hp: "hp" in source,
+    // AC is free text, so an empty string is the same as never having set it.
+    ac: readText(source, "ac") !== "",
+  };
 }
 
 export function toTrackedToken(item: Image): TrackedToken {
@@ -140,19 +172,24 @@ export async function writeStatsBatch(
  * A computed key (`{ [key]: value }`) widens to an index signature and loses
  * the link to TokenStats, so the switch keeps the compiler in the loop.
  */
-export function statPatch(key: StatKey, value: number): Partial<TokenStats> {
+export function statPatch(
+  key: NumericStatKey,
+  value: number,
+): Partial<TokenStats> {
   switch (key) {
     case "hp":
       return { hp: value };
-    case "ac":
-      return { ac: value };
+    case "extraHp":
+      return { extraHp: value };
+    case "maxHp":
+      return { maxHp: value };
   }
 }
 
-/** Returns a copy of `stats` with one field replaced. */
+/** Returns a copy of `stats` with one numeric field replaced. */
 export function withStat(
   stats: TokenStats,
-  key: StatKey,
+  key: NumericStatKey,
   value: number,
 ): TokenStats {
   return { ...stats, ...statPatch(key, value) };

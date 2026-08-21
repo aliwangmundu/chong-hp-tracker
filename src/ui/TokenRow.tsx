@@ -1,14 +1,17 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import OBR from "@owlbear-rodeo/sdk";
-import { clampAc, clampHp } from "@/core/inlineMath";
-import type { StatKey, TrackedToken } from "@/core/types";
+import { clampHp } from "@/core/inlineMath";
+import type { NumericStatKey, TrackedToken } from "@/core/types";
+import AcField from "./AcField";
 import StatField from "./StatField";
 
 type Props = {
   token: TrackedToken;
   selected: boolean;
-  onStatChange: (id: string, key: StatKey, value: number) => void;
+  onStatChange: (id: string, key: NumericStatKey, value: number) => void;
+  onAcChange: (id: string, value: string) => void;
+  onOpenDetails: (id: string) => void;
 };
 
 /**
@@ -41,7 +44,13 @@ async function focusToken(id: string): Promise<void> {
   });
 }
 
-export default function TokenRow({ token, selected, onStatChange }: Props) {
+export default function TokenRow({
+  token,
+  selected,
+  onStatChange,
+  onAcChange,
+  onOpenDetails,
+}: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: token.id });
 
@@ -52,7 +61,7 @@ export default function TokenRow({ token, selected, onStatChange }: Props) {
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={[
-        "group flex items-center gap-2 rounded-lg px-2 py-1.5",
+        "group flex items-center gap-1.5 rounded-lg px-1.5 py-1",
         "hover:bg-ink-100/70 dark:hover:bg-ink-900/60",
         isDragging ? "z-10 opacity-80 shadow-lg" : "",
         selected ? "bg-ink-100 dark:bg-ink-900" : "",
@@ -65,7 +74,7 @@ export default function TokenRow({ token, selected, onStatChange }: Props) {
         title={`Focus ${token.name}`}
         onClick={() => void focusToken(token.id)}
         className={[
-          "size-8 shrink-0 overflow-hidden rounded outline-none",
+          "size-7 shrink-0 overflow-hidden rounded outline-none",
           "focus-visible:ring-2 focus-visible:ring-ink-400",
           selected ? "ring-2 ring-ink-500 dark:ring-ink-300" : "",
         ].join(" ")}
@@ -90,24 +99,46 @@ export default function TokenRow({ token, selected, onStatChange }: Props) {
         </div>
       </div>
 
-      <div className="shrink-0">
-        <StatField
-          label={`${token.name} hit points`}
-          value={hp}
-          widthClass="w-24"
-          big
-          onCommit={(next) => onStatChange(token.id, "hp", clampHp(next))}
-        />
-      </div>
+      <StatField
+        label={`${token.name} hit points`}
+        value={hp}
+        widthClass="w-16 shrink-0"
+        onCommit={(next) => onStatChange(token.id, "hp", clampHp(next))}
+      />
 
-      <div className="shrink-0">
-        <StatField
-          label={`${token.name} armor class`}
-          value={ac}
-          widthClass="w-14"
-          onCommit={(next) => onStatChange(token.id, "ac", clampAc(next))}
-        />
-      </div>
+      <AcField
+        label={`${token.name} armor class`}
+        value={ac}
+        widthClass="w-11 shrink-0"
+        onCommit={(next) => onAcChange(token.id, next)}
+      />
+
+      <button
+        type="button"
+        aria-label={`More stats for ${token.name}`}
+        title="Extra HP and max HP"
+        onClick={() => onOpenDetails(token.id)}
+        onPointerDown={(event) => event.stopPropagation()}
+        className={[
+          "flex size-6 shrink-0 items-center justify-center rounded-md",
+          "text-ink-400 transition-colors",
+          "hover:bg-ink-200 hover:text-ink-800",
+          "dark:text-ink-600 dark:hover:bg-ink-800 dark:hover:text-ink-100",
+        ].join(" ")}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          aria-hidden
+        >
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </button>
     </div>
   );
 }

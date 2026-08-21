@@ -19,6 +19,12 @@
   .app-surface {
     @apply bg-ink-50/95 text-ink-900 dark:bg-ink-975/90 dark:text-ink-100;
   }
+
+  /* The drawer slides over the list, so it has to be fully opaque — the
+     translucent panel background would let the rows show through it. */
+  .drawer-surface {
+    @apply bg-ink-50 text-ink-900 dark:bg-ink-975 dark:text-ink-100;
+  }
 }
 
 @layer utilities {

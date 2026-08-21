@@ -12,7 +12,7 @@ const token = (
   name,
   imageUrl: "",
   visible: true,
-  stats: { hp: 10, ac: 12, category, index },
+  stats: { hp: 10, extraHp: 0, maxHp: 0, ac: "12", category, index },
 });
 
 describe("groupByCategory", () => {

@@ -1,7 +1,12 @@
 import type { ReactNode } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { type Category, CATEGORY_LABEL, type StatKey, type TrackedToken } from "@/core/types";
+import {
+  type Category,
+  CATEGORY_LABEL,
+  type NumericStatKey,
+  type TrackedToken,
+} from "@/core/types";
 import TokenRow from "./TokenRow";
 
 export const droppableIdFor = (category: Category) => `category:${category}`;
@@ -16,7 +21,9 @@ type Props = {
   category: Category;
   tokens: TrackedToken[];
   selection: string[];
-  onStatChange: (id: string, key: StatKey, value: number) => void;
+  onStatChange: (id: string, key: NumericStatKey, value: number) => void;
+  onAcChange: (id: string, value: string) => void;
+  onOpenDetails: (id: string) => void;
   /** Optional control pinned to the right of the section heading. */
   headerAction?: ReactNode;
 };
@@ -26,6 +33,8 @@ export default function CategorySection({
   tokens,
   selection,
   onStatChange,
+  onAcChange,
+  onOpenDetails,
   headerAction,
 }: Props) {
   // The section itself is a drop target so an empty category still accepts a
@@ -67,6 +76,8 @@ export default function CategorySection({
                 token={token}
                 selected={selection.includes(token.id)}
                 onStatChange={onStatChange}
+                onAcChange={onAcChange}
+                onOpenDetails={onOpenDetails}
               />
             ))
           )}
