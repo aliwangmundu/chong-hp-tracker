@@ -87,11 +87,11 @@ export default function TokenRow({
         />
       </button>
 
-      {/* Sized to its text, not stretched: a flexible name column is what
-          pushes the stats to the far edge and opens a gap across the row. */}
+      {/* Takes the leftover width so long names truncate. The panel itself is
+          narrow enough that "leftover" is a small gap, not a chasm. */}
       <div
         className={[
-          "min-w-0 shrink truncate text-sm",
+          "min-w-0 flex-1 truncate text-sm",
           token.visible ? "" : "italic text-ink-400 dark:text-ink-500",
         ].join(" ")}
         title={token.name}
@@ -113,8 +113,6 @@ export default function TokenRow({
         widthClass="w-11 shrink-0"
         onCommit={(next) => onAcChange(token.id, next)}
       />
-
-      <div className="flex-1" />
 
       <button
         type="button"

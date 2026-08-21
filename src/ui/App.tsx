@@ -3,7 +3,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import OBR, { type Item, type Metadata } from "@owlbear-rodeo/sdk";
@@ -35,7 +34,10 @@ import {
 } from "@/core/types";
 import CategorySection, { categoryFromDroppableId } from "./CategorySection";
 import HideToggle from "./HideToggle";
-import TokenDrawer from "./TokenDrawer";
+import TokenDrawer, { DETAIL_WIDTH } from "./TokenDrawer";
+
+/** Popover width with only the token list showing. Matches manifest.json. */
+const PANEL_WIDTH = 320;
 
 export default function App() {
   const [tokens, setTokens] = useState<TrackedToken[]>([]);
@@ -167,11 +169,25 @@ export default function App() {
     [detailsFor, tokens],
   );
 
-  // Keep the last token on screen while the deck slides back, so the pane does
-  // not blank out halfway through the transition.
-  const lastDetailsToken = useRef<TrackedToken | null>(null);
-  if (detailsToken !== null) lastDetailsToken.current = detailsToken;
-  const paneToken = detailsToken ?? lastDetailsToken.current;
+  const detailsOpen = detailsToken !== null;
+
+  /**
+   * Grow the popover instead of covering the list.
+   *
+   * Owlbear sizes the popover from the manifest, but an extension can resize
+   * its own; widening by exactly the card's width is what puts the second
+   * window beside the first rather than over it.
+   */
+  useEffect(() => {
+    void OBR.action.setWidth(
+      detailsOpen ? PANEL_WIDTH + DETAIL_WIDTH : PANEL_WIDTH,
+    );
+  }, [detailsOpen]);
+
+  // The token was deleted from the scene while its card was open.
+  useEffect(() => {
+    if (detailsFor !== null && detailsToken === null) setDetailsFor(null);
+  }, [detailsFor, detailsToken]);
 
   /**
    * Rows beat sections.
@@ -243,58 +259,51 @@ export default function App() {
   );
 
   return (
-    <div className="app-surface h-full overflow-hidden">
-      {/* Two cards side by side at twice the panel width; opening the details
-          slides the pair left so the second arrives from the right edge. */}
-      <div
-        className={[
-          "flex h-full w-[200%] transition-transform duration-200 ease-out",
-          detailsToken !== null ? "-translate-x-1/2" : "translate-x-0",
-        ].join(" ")}
-      >
-        <main className="h-full w-1/2 shrink-0 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">
-          {!sceneReady ? (
-            <Placeholder>Open a scene to start tracking.</Placeholder>
-          ) : visibleTokenCount === 0 ? (
-            <Placeholder>
-              Drop a token on the map and it will show up here.
-            </Placeholder>
-          ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={collisionDetection}
-              modifiers={[restrictToFirstScrollableAncestor]}
-              onDragEnd={handleDragEnd}
-            >
-              {visibleCategories.map((category) => (
-                <CategorySection
-                  key={category}
-                  category={category}
-                  tokens={groups[category]}
-                  selection={selection}
-                  onStatChange={handleStatChange}
-                  onAcChange={handleAcChange}
-                  onOpenDetails={setDetailsFor}
-                  headerAction={
-                    category === "ADVERSARY" && isGm ? (
-                      <HideToggle
-                        hidden={adversariesHidden}
-                        onToggle={toggleAdversariesHidden}
-                      />
-                    ) : undefined
-                  }
-                />
-              ))}
-            </DndContext>
-          )}
-        </main>
+    <div className="app-surface flex h-full overflow-hidden">
+      <main className="h-full min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">
+        {!sceneReady ? (
+          <Placeholder>Open a scene to start tracking.</Placeholder>
+        ) : visibleTokenCount === 0 ? (
+          <Placeholder>
+            Drop a token on the map and it will show up here.
+          </Placeholder>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={collisionDetection}
+            modifiers={[restrictToFirstScrollableAncestor]}
+            onDragEnd={handleDragEnd}
+          >
+            {visibleCategories.map((category) => (
+              <CategorySection
+                key={category}
+                category={category}
+                tokens={groups[category]}
+                selection={selection}
+                onStatChange={handleStatChange}
+                onAcChange={handleAcChange}
+                onOpenDetails={setDetailsFor}
+                headerAction={
+                  category === "ADVERSARY" && isGm ? (
+                    <HideToggle
+                      hidden={adversariesHidden}
+                      onToggle={toggleAdversariesHidden}
+                    />
+                  ) : undefined
+                }
+              />
+            ))}
+          </DndContext>
+        )}
+      </main>
 
+      {detailsOpen && (
         <TokenDrawer
-          token={paneToken}
+          token={detailsToken}
           onClose={() => setDetailsFor(null)}
           onStatChange={handleStatChange}
         />
-      </div>
+      )}
     </div>
   );
 }

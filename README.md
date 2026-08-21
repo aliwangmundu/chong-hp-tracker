@@ -29,11 +29,12 @@ columns, and a health field you can do arithmetic in.
   `+ - * /` and parentheses work. An expression that will not parse flashes red
   and leaves the value alone rather than committing a wrong number.
 
-- **`+` on each row** slides the panel across to a second card holding the stats
-  that do not deserve a column: extra HP (temporary hit points, added into the
-  number on the token) and max HP (caps the HP field, never drawn on the map).
-  Both are plain number fields — arithmetic entry is for HP only, where "-25"
-  is what you actually mean.
+- **`+` on each row** opens a second card *beside* the list, widening the
+  popover rather than covering it, so the roster stays visible and usable while
+  you edit. It holds extra HP (temporary hit points, added into the number on
+  the token) and max HP (caps the HP field, never drawn on the map). Both are
+  plain number fields — arithmetic entry is for HP only, where "-25" is what
+  you actually mean.
 - **Hide adversaries.** A GM-only switch on the Adversaries heading takes that
   list off every player's panel. Bubbles on the tokens are unaffected, so the
   monsters still show their HP and AC on the map — the roster is what gets
@@ -121,6 +122,11 @@ Only the GM reconciles. Every client runs the background script, and letting
 them all write the same room key would mean the last writer wins at random.
 
 ### Notes on the design
+
+- **The popover resizes itself.** `manifest.json` sets the narrow width for the
+  list alone; opening a token's extra stats calls `OBR.action.setWidth` to grow
+  the window by exactly the second card's width. `PANEL_WIDTH` in
+  `src/ui/App.tsx` must stay in step with `action.width` in the manifest.
 
 - **Attachments are local items.** Each client draws its own bubbles from the
   shared token metadata, so the scene file stays clean, undo history is not

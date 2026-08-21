@@ -3,6 +3,9 @@ import { clampExtraHp, clampMaxHp } from "@/core/inlineMath";
 import type { NumericStatKey, TrackedToken } from "@/core/types";
 import StatField from "./StatField";
 
+/** Extra popover width the second card needs, in pixels. */
+export const DETAIL_WIDTH = 240;
+
 type Props = {
   token: TrackedToken | null;
   onClose: () => void;
@@ -10,20 +13,22 @@ type Props = {
 };
 
 /**
- * The second card in the deck: stats that do not earn a column in the list.
+ * A second card that opens beside the list rather than on top of it.
  *
- * Rendered as a sibling pane rather than an overlay — the deck in App slides
- * both panes sideways together, so this one arrives from the right edge with
- * the list travelling out to the left.
+ * App widens the Owlbear popover by exactly this card's width when it appears,
+ * so the token list stays fully visible and keeps working while you edit here.
  */
 export default function TokenDrawer({ token, onClose, onStatChange }: Props) {
   return (
-    <div className="flex h-full w-1/2 shrink-0 flex-col">
+    <div
+      className="flex h-full shrink-0 flex-col border-l border-ink-200 dark:border-ink-800"
+      style={{ width: DETAIL_WIDTH }}
+    >
       <header className="flex items-center gap-2 border-b border-ink-200 px-2 py-2 dark:border-ink-800">
         <button
           type="button"
           onClick={onClose}
-          aria-label="Back to the token list"
+          aria-label="Close extra stats"
           className="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-800 dark:text-ink-400 dark:hover:bg-ink-900 dark:hover:text-ink-100"
         >
           <svg
@@ -37,7 +42,7 @@ export default function TokenDrawer({ token, onClose, onStatChange }: Props) {
             strokeLinejoin="round"
             aria-hidden
           >
-            <path d="m15 18-6-6 6-6" />
+            <path d="M18 6 6 18M6 6l12 12" />
           </svg>
         </button>
 
