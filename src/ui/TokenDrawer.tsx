@@ -10,23 +10,15 @@ type Props = {
 };
 
 /**
- * The overflow panel for stats that do not earn a column in the list.
+ * The second card in the deck: stats that do not earn a column in the list.
  *
- * Kept mounted and slid off to the left rather than unmounted, so it animates
- * both ways and the fields do not flash as they are torn down mid-transition.
+ * Rendered as a sibling pane rather than an overlay — the deck in App slides
+ * both panes sideways together, so this one arrives from the right edge with
+ * the list travelling out to the left.
  */
 export default function TokenDrawer({ token, onClose, onStatChange }: Props) {
-  const open = token !== null;
-
   return (
-    <div
-      aria-hidden={!open}
-      className={[
-        "drawer-surface absolute inset-0 z-30 flex flex-col",
-        "transition-transform duration-200 ease-out",
-        open ? "translate-x-0" : "pointer-events-none -translate-x-full",
-      ].join(" ")}
-    >
+    <div className="flex h-full w-1/2 shrink-0 flex-col">
       <header className="flex items-center gap-2 border-b border-ink-200 px-2 py-2 dark:border-ink-800">
         <button
           type="button"
@@ -75,17 +67,22 @@ export default function TokenDrawer({ token, onClose, onStatChange }: Props) {
                 label={`${token.name} extra hit points`}
                 value={token.stats.extraHp}
                 widthClass="w-20"
+                allowMath={false}
                 onCommit={(next) =>
                   onStatChange(token.id, "extraHp", clampExtraHp(next))
                 }
               />
             </Row>
 
-            <Row term="Max HP" hint="Recorded here only — never drawn on the map.">
+            <Row
+              term="Max HP"
+              hint="Caps the HP field. Never drawn on the map. 0 means no cap."
+            >
               <StatField
                 label={`${token.name} maximum hit points`}
                 value={token.stats.maxHp}
                 widthClass="w-20"
+                allowMath={false}
                 onCommit={(next) =>
                   onStatChange(token.id, "maxHp", clampMaxHp(next))
                 }

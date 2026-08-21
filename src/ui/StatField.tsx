@@ -9,6 +9,11 @@ type Props = {
   widthClass?: string;
   /** Taller with a larger typeface — used for HP, the field you actually type in. */
   big?: boolean;
+  /**
+   * Arithmetic entry. Off for the secondary stats, where a bare number is the
+   * only sensible input and "+5" almost certainly means a typo.
+   */
+  allowMath?: boolean;
   disabled?: boolean;
 };
 
@@ -28,6 +33,7 @@ export default function StatField({
   label,
   widthClass = "w-14",
   big = false,
+  allowMath = true,
   disabled = false,
 }: Props) {
   const [draft, setDraft] = useState<string | null>(null);
@@ -58,6 +64,7 @@ export default function StatField({
 
   // Only preview when the draft is doing something a plain number would not.
   const preview = (() => {
+    if (!allowMath) return null;
     if (draft === null) return null;
     const trimmed = draft.trim();
     if (trimmed === "" || /^\d+$/.test(trimmed)) return null;
@@ -67,6 +74,18 @@ export default function StatField({
 
   const commit = () => {
     if (draft === null) return;
+
+    if (!allowMath) {
+      const parsed = Number.parseInt(draft.trim(), 10);
+      setDraft(null);
+      if (!Number.isFinite(parsed)) {
+        flashError();
+        return;
+      }
+      if (parsed !== value) onCommit(parsed);
+      return;
+    }
+
     const result = evaluateStatInput(draft, value);
     setDraft(null);
     if (!result.ok) {
@@ -91,7 +110,9 @@ export default function StatField({
         autoComplete="off"
         spellCheck={false}
         aria-label={label}
-        title={`${label} — type -25, +8 or -25 + 8`}
+        title={
+          allowMath ? `${label} — type -25, +8 or -25 + 8` : label
+        }
         disabled={disabled}
         value={shown}
         className={[

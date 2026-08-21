@@ -1,4 +1,11 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import OBR, { type Item, type Metadata } from "@owlbear-rodeo/sdk";
 import {
   type CollisionDetection,
@@ -160,6 +167,12 @@ export default function App() {
     [detailsFor, tokens],
   );
 
+  // Keep the last token on screen while the deck slides back, so the pane does
+  // not blank out halfway through the transition.
+  const lastDetailsToken = useRef<TrackedToken | null>(null);
+  if (detailsToken !== null) lastDetailsToken.current = detailsToken;
+  const paneToken = detailsToken ?? lastDetailsToken.current;
+
   /**
    * Rows beat sections.
    *
@@ -230,56 +243,58 @@ export default function App() {
   );
 
   return (
-    <div className="app-surface relative flex h-full flex-col overflow-hidden">
-      <div className="flex items-center gap-1.5 px-3.5 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wider text-ink-400 dark:text-ink-600">
-        <span className="flex-1">Token</span>
-        <span className="w-16 text-center">HP</span>
-        <span className="w-11 text-center">AC</span>
-        <span className="w-6" />
+    <div className="app-surface h-full overflow-hidden">
+      {/* Two cards side by side at twice the panel width; opening the details
+          slides the pair left so the second arrives from the right edge. */}
+      <div
+        className={[
+          "flex h-full w-[200%] transition-transform duration-200 ease-out",
+          detailsToken !== null ? "-translate-x-1/2" : "translate-x-0",
+        ].join(" ")}
+      >
+        <main className="h-full w-1/2 shrink-0 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">
+          {!sceneReady ? (
+            <Placeholder>Open a scene to start tracking.</Placeholder>
+          ) : visibleTokenCount === 0 ? (
+            <Placeholder>
+              Drop a token on the map and it will show up here.
+            </Placeholder>
+          ) : (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={collisionDetection}
+              modifiers={[restrictToFirstScrollableAncestor]}
+              onDragEnd={handleDragEnd}
+            >
+              {visibleCategories.map((category) => (
+                <CategorySection
+                  key={category}
+                  category={category}
+                  tokens={groups[category]}
+                  selection={selection}
+                  onStatChange={handleStatChange}
+                  onAcChange={handleAcChange}
+                  onOpenDetails={setDetailsFor}
+                  headerAction={
+                    category === "ADVERSARY" && isGm ? (
+                      <HideToggle
+                        hidden={adversariesHidden}
+                        onToggle={toggleAdversariesHidden}
+                      />
+                    ) : undefined
+                  }
+                />
+              ))}
+            </DndContext>
+          )}
+        </main>
+
+        <TokenDrawer
+          token={paneToken}
+          onClose={() => setDetailsFor(null)}
+          onStatChange={handleStatChange}
+        />
       </div>
-
-      <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4">
-        {!sceneReady ? (
-          <Placeholder>Open a scene to start tracking.</Placeholder>
-        ) : visibleTokenCount === 0 ? (
-          <Placeholder>
-            Drop a token on the map and it will show up here.
-          </Placeholder>
-        ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={collisionDetection}
-            modifiers={[restrictToFirstScrollableAncestor]}
-            onDragEnd={handleDragEnd}
-          >
-            {visibleCategories.map((category) => (
-              <CategorySection
-                key={category}
-                category={category}
-                tokens={groups[category]}
-                selection={selection}
-                onStatChange={handleStatChange}
-                onAcChange={handleAcChange}
-                onOpenDetails={setDetailsFor}
-                headerAction={
-                  category === "ADVERSARY" && isGm ? (
-                    <HideToggle
-                      hidden={adversariesHidden}
-                      onToggle={toggleAdversariesHidden}
-                    />
-                  ) : undefined
-                }
-              />
-            ))}
-          </DndContext>
-        )}
-      </main>
-
-      <TokenDrawer
-        token={detailsToken}
-        onClose={() => setDetailsFor(null)}
-        onStatChange={handleStatChange}
-      />
     </div>
   );
 }

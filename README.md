@@ -29,9 +29,11 @@ columns, and a health field you can do arithmetic in.
   `+ - * /` and parentheses work. An expression that will not parse flashes red
   and leaves the value alone rather than committing a wrong number.
 
-- **`+` on each row** opens a drawer for the stats that do not deserve a column:
-  extra HP (temporary hit points, added into the number on the token) and max HP
-  (recorded, never drawn on the map).
+- **`+` on each row** slides the panel across to a second card holding the stats
+  that do not deserve a column: extra HP (temporary hit points, added into the
+  number on the token) and max HP (caps the HP field, never drawn on the map).
+  Both are plain number fields — arithmetic entry is for HP only, where "-25"
+  is what you actually mean.
 - **Hide adversaries.** A GM-only switch on the Adversaries heading takes that
   list off every player's panel. Bubbles on the tokens are unaffected, so the
   monsters still show their HP and AC on the map — the roster is what gets
@@ -141,7 +143,8 @@ them all write the same room key would mean the last writer wins at random.
 - Only **allies** persist across scenes — the category check in
   `src/obr/persistence.ts`.
 - AC allows three characters — `AC_MAX_LENGTH` in `src/core/ac.ts`.
-- HP floors at 0 — `clampHp` in `src/core/inlineMath.ts`.
+- HP floors at 0 and is capped by max HP once one is set; a max of 0 means no
+  cap — `clampHp` in `src/core/inlineMath.ts`.
 
 ## Credits
 

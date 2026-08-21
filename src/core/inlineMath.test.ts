@@ -132,6 +132,15 @@ describe("clamping", () => {
     expect(clampHp(99999)).toBe(HP_LIMIT);
   });
 
+  it("caps HP at the maximum once one is recorded", () => {
+    expect(clampHp(50, 20)).toBe(20);
+    expect(clampHp(12, 20)).toBe(12);
+  });
+
+  it("treats a maximum of 0 as unset", () => {
+    expect(clampHp(50, 0)).toBe(50);
+  });
+
   it("clamps extra and maximum HP the same way", () => {
     expect(clampExtraHp(-5)).toBe(0);
     expect(clampExtraHp(12)).toBe(12);

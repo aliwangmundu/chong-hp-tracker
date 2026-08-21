@@ -236,11 +236,21 @@ export const HP_LIMIT = 9999;
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
 
-/** HP floors at 0 — nothing is deader than dead. */
-export function clampHp(value: number): number {
+/**
+ * HP floors at 0 and, once a maximum is recorded, cannot exceed it.
+ *
+ * A maximum of 0 means "not set" and imposes no cap, so tokens you have not
+ * filled in a maximum for still take any value.
+ */
+export function clampHp(value: number, maxHp = 0): number {
+  return clamp(value, 0, maxHp > 0 ? maxHp : HP_LIMIT);
+}
+
+/** Extra and maximum HP are plain magnitudes with no cap of their own. */
+export function clampExtraHp(value: number): number {
   return clamp(value, 0, HP_LIMIT);
 }
 
-/** Extra and maximum HP share HP's range. */
-export const clampExtraHp = clampHp;
-export const clampMaxHp = clampHp;
+export function clampMaxHp(value: number): number {
+  return clamp(value, 0, HP_LIMIT);
+}

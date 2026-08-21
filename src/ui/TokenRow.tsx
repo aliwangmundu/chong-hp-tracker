@@ -54,7 +54,7 @@ export default function TokenRow({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: token.id });
 
-  const { hp, ac } = token.stats;
+  const { hp, ac, maxHp } = token.stats;
 
   return (
     <div
@@ -87,23 +87,24 @@ export default function TokenRow({
         />
       </button>
 
-      <div className="min-w-0 flex-1">
-        <div
-          className={[
-            "truncate text-sm",
-            token.visible ? "" : "italic text-ink-400 dark:text-ink-500",
-          ].join(" ")}
-          title={token.name}
-        >
-          {token.name || "Unnamed"}
-        </div>
+      {/* Sized to its text, not stretched: a flexible name column is what
+          pushes the stats to the far edge and opens a gap across the row. */}
+      <div
+        className={[
+          "min-w-0 shrink truncate text-sm",
+          token.visible ? "" : "italic text-ink-400 dark:text-ink-500",
+        ].join(" ")}
+        title={token.name}
+      >
+        {token.name || "Unnamed"}
       </div>
 
       <StatField
         label={`${token.name} hit points`}
         value={hp}
-        widthClass="w-16 shrink-0"
-        onCommit={(next) => onStatChange(token.id, "hp", clampHp(next))}
+        widthClass="w-20 shrink-0"
+        big
+        onCommit={(next) => onStatChange(token.id, "hp", clampHp(next, maxHp))}
       />
 
       <AcField
@@ -112,6 +113,8 @@ export default function TokenRow({
         widthClass="w-11 shrink-0"
         onCommit={(next) => onAcChange(token.id, next)}
       />
+
+      <div className="flex-1" />
 
       <button
         type="button"
