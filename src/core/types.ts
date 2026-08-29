@@ -30,6 +30,14 @@ export type TrackedRecord = {
   conditions: Condition[];
   /** Category this record is filed under, or null for the ungrouped list. */
   categoryId: string | null;
+  /**
+   * Ticked to move this record to the player tab.
+   *
+   * Records start as the GM's: a monster typed in mid-fight should not land in
+   * front of the table before anyone has looked at it. Ticking one hands it
+   * over, and it leaves the DM tab in the same movement.
+   */
+  isPlayer: boolean;
 };
 
 /** A scene token that a record can be linked to. */

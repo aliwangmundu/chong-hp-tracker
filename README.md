@@ -20,10 +20,15 @@ without it.
   the only place it can be changed. A mistimed click during combat can cost you
   a hit point; it can never rename a character or unlink its token.
   Drag rows to reorder; the order sticks.
-- **Two tabs, Player and DM.** The DM view is the workshop — categories, Chosen,
-  drag-to-file. The player view is a flat roster with the damage button and
-  nothing else. Both are open to everyone; your role only picks which one opens
-  first.
+- **Two tabs, Player and DM, and a record is in exactly one of them.** Tick
+  **Player** at the bottom of a record's panel to hand it over: it appears on
+  the Player tab and leaves the DM tab in the same movement. Everything starts
+  on the DM tab, so a monster typed in mid-fight is never in front of the table
+  before you have looked at it. Both tabs are open to everyone — the tick sorts
+  records, it does not lock anyone out — and your role only picks which tab
+  opens first.
+  The DM tab is the workshop: categories, Chosen, drag-to-file. The Player tab
+  is a flat roster with the damage button and nothing else.
 - **A one-press damage button beside HP, in the player view.** It applies
   whatever signed number is in that record's **AC** field: put `-5` there and
   every press takes five off. The sign is required, so a plain `18` leaves the
@@ -284,6 +289,8 @@ src/ui/      the panel
   `src/core/records.ts`; category names at 24 —
   `CATEGORY_NAME_MAX_LENGTH` in `src/core/categories.ts`.
 - New categories start hidden — `newCategory` in `src/core/categories.ts`.
+- New records start on the DM tab — `isPlayer` in `newRecord`,
+  `src/core/records.ts`.
 - Condition and resource names cap at 24 characters —
   `ENTRY_NAME_MAX_LENGTH` in `src/core/entries.ts`.
 - Four condition circles per token — `MAX_CONDITION_BUBBLES` in

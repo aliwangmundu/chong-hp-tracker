@@ -27,6 +27,7 @@ export function newRecord(name = ""): TrackedRecord {
     note: "",
     conditions: [],
     categoryId: null,
+    isPlayer: false,
   };
 }
 
@@ -103,6 +104,10 @@ export function parseRecords(
         typeof source["categoryId"] === "string"
           ? source["categoryId"]
           : null,
+      // Anything unreadable stays with the GM, which is the safe direction to
+      // guess in: a record shown to nobody is a nuisance, one shown to the
+      // whole table by accident is a spoiler.
+      isPlayer: source["isPlayer"] === true,
     });
   }
   return records;

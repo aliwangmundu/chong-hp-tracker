@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  RECORDS_KEY,
   moveRecord,
   moveRecordInto,
   newRecord,
+  parseRecords,
   releaseToken,
   withRecord,
   withoutRecord,
@@ -114,5 +116,36 @@ describe("releaseToken", () => {
       null,
       null,
     ]);
+  });
+});
+
+describe("the player tick", () => {
+  it("starts with the GM", () => {
+    expect(newRecord("Goblin").isPlayer).toBe(false);
+  });
+
+  it("survives a round trip through metadata", () => {
+    const parsed = parseRecords({
+      [RECORDS_KEY]: [{ id: "a", isPlayer: true }],
+    });
+    expect(parsed[0]?.isPlayer).toBe(true);
+  });
+
+  it("leaves a record written before the tick existed with the GM", () => {
+    const parsed = parseRecords({ [RECORDS_KEY]: [{ id: "a" }] });
+    expect(parsed[0]?.isPlayer).toBe(false);
+  });
+
+  it("refuses anything that is not exactly true", () => {
+    // A stray "true" or 1 from a hand-edited room should not push a monster in
+    // front of the table.
+    const parsed = parseRecords({
+      [RECORDS_KEY]: [
+        { id: "a", isPlayer: "true" },
+        { id: "b", isPlayer: 1 },
+        { id: "c", isPlayer: null },
+      ],
+    });
+    expect(parsed.map((r) => r.isPlayer)).toEqual([false, false, false]);
   });
 });

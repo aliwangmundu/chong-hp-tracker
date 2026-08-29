@@ -21,6 +21,7 @@ type Props = {
   onConditionsChange: (id: string, next: Condition[]) => void;
   /** Only ever called with null here — linking happens from the row's slot. */
   onAssign: (id: string, tokenId: string | null) => void;
+  onTogglePlayer: (id: string) => void;
   onDelete: (id: string) => void;
 };
 
@@ -46,6 +47,7 @@ export default function RecordDetails({
   onNoteChange,
   onConditionsChange,
   onAssign,
+  onTogglePlayer,
   onDelete,
 }: Props) {
   return (
@@ -139,7 +141,14 @@ export default function RecordDetails({
           </InlineStat>
         </div>
 
-        <div className="pt-1">
+        {/* The last line, and the only two things that change where a record
+            lives rather than what it says. */}
+        <div className="flex items-center gap-2 border-t border-ink-200 pt-2 dark:border-ink-800">
+          <PlayerTick
+            checked={record.isPlayer}
+            onToggle={() => onTogglePlayer(record.id)}
+          />
+          <div className="flex-1" />
           <SmallButton
             danger
             title="Delete this record. The token itself is untouched."
@@ -150,6 +159,68 @@ export default function RecordDetails({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Hands a record to the players.
+ *
+ * Ticked, it shows on the Player tab and nowhere else; unticked — the default —
+ * it stays on the DM tab. The GM keeps both tabs, so a ticked record is one
+ * click away rather than gone.
+ */
+function PlayerTick({
+  checked,
+  onToggle,
+}: {
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      title={
+        checked
+          ? "A player record. Untick to move it back to the DM tab."
+          : "Tick to make this a player record — it moves to the Player tab."
+      }
+      onClick={onToggle}
+      className={[
+        "flex shrink-0 items-center gap-1.5 rounded px-1.5 py-1 text-[11px]",
+        "transition-colors hover:bg-ink-200 dark:hover:bg-ink-800",
+        checked
+          ? "text-ink-800 dark:text-ink-100"
+          : "text-ink-500 dark:text-ink-400",
+      ].join(" ")}
+    >
+      <span
+        className={[
+          "flex size-4 items-center justify-center rounded border",
+          checked
+            ? "border-ink-600 bg-ink-600 text-white dark:border-ink-300 dark:bg-ink-300 dark:text-ink-950"
+            : "border-ink-300 dark:border-ink-700",
+        ].join(" ")}
+      >
+        {checked && (
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        )}
+      </span>
+      Player
+    </button>
   );
 }
 

@@ -289,6 +289,25 @@ export default function App() {
     [editRecords],
   );
 
+  /**
+   * Hands a record to the players, or takes it back.
+   *
+   * The two tabs are a partition, not a filter with an overlap: a ticked record
+   * leaves the DM tab as it arrives on the Player one. That is the point — the
+   * GM's tab stays the list of things the table is not looking at.
+   */
+  const handleTogglePlayer = useCallback(
+    (id: string) =>
+      editRecords((current) =>
+        current.map((record) =>
+          record.id === id
+            ? { ...record, isPlayer: !record.isPlayer }
+            : record,
+        ),
+      ),
+    [editRecords],
+  );
+
   const handleDelete = useCallback(
     (id: string) => {
       setExpandedId((open) => (open === id ? null : open));
@@ -396,6 +415,9 @@ export default function App() {
     for (const category of visibleCategories) byCategory.set(category.id, []);
 
     for (const record of state.records) {
+      // Ticked records belong to the other tab entirely.
+      if (record.isPlayer) continue;
+
       const id = record.categoryId;
       const filed = id !== null && known.has(id);
       // A hidden category hides its records even from Chosen — otherwise a
@@ -493,16 +515,19 @@ export default function App() {
   );
 
   /**
-   * Everything this person may see, flat and in list order.
+   * The ticked records, flat and in list order.
    *
    * The player view has no categories at all — the grouping is the GM's filing
    * system, not something a player should have to navigate mid-fight — so the
-   * hidden ones are simply filtered out and the rest run together.
+   * hidden ones are filtered out and the rest run together. Category visibility
+   * still applies on top of the tick: a record ticked into a hidden category is
+   * hidden, because the category is the stronger statement of the two.
    */
   const flatRecords = useMemo(() => {
     const known = new Set(state.categories.map((category) => category.id));
     const allowed = new Set(visibleCategories.map((category) => category.id));
     return state.records.filter((record) => {
+      if (!record.isPlayer) return false;
       const id = record.categoryId;
       if (id === null || !known.has(id)) return true;
       return allowed.has(id);
@@ -548,6 +573,7 @@ export default function App() {
                 onNoteChange={handleNoteChange}
                 onConditionsChange={handleConditionsChange}
                 onAssign={handleAssign}
+                onTogglePlayer={handleTogglePlayer}
                 onDelete={handleDelete}
               />
             )}
@@ -585,7 +611,10 @@ export default function App() {
         <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">
           {view === "PLAYER" ? (
             flatRecords.length === 0 ? (
-              <Placeholder>Nothing to track yet.</Placeholder>
+              <Placeholder>
+                Nothing here yet. Tick <strong>Player</strong> at the bottom of
+                a record to move it to this tab.
+              </Placeholder>
             ) : (
               // No DndContext: with the sections gone there is nothing to drag
               // between, and reordering a filtered list would shuffle records
