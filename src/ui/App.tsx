@@ -1,4 +1,5 @@
 import {
+  Fragment,
   type ReactNode,
   useCallback,
   useEffect,
@@ -53,15 +54,13 @@ import type {
 import CategorySection, {
   categoryFromDroppableId,
 } from "./CategorySection";
-import RecordDrawer, { DETAIL_WIDTH } from "./RecordDrawer";
+import RecordDetails from "./RecordDetails";
 import RecordRow from "./RecordRow";
 import RoundBar from "./RoundBar";
 
 /**
- * Popover width with only the record list showing.
- *
- * This is the authority — the effect below sets it on every close, so the
- * matching `action.width` in manifest.json only governs the very first frame.
+ * Popover width. Fixed now that details open inline rather than beside the
+ * list, so this only has to agree with `action.width` in manifest.json.
  */
 const PANEL_WIDTH = 288;
 
@@ -74,7 +73,7 @@ export default function App() {
   const [sceneReady, setSceneReady] = useState(false);
   const [isGm, setIsGm] = useState(false);
   const [round, setRoundState] = useState(FIRST_ROUND);
-  const [detailsFor, setDetailsFor] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Scene tokens — only for linking, thumbnails and names.
   useEffect(() => {
@@ -161,7 +160,9 @@ export default function App() {
   const addRecord = useCallback(() => {
     const record = newRecord();
     editRecords((current) => [...current, record]);
-    setDetailsFor(record.id);
+    // Open it straight away: a new record has no name yet, and naming it is the
+    // first thing anyone wants to do.
+    setExpandedId(record.id);
   }, [editRecords]);
 
   const addCategory = useCallback(() => {
@@ -218,7 +219,7 @@ export default function App() {
 
   const handleDelete = useCallback(
     (id: string) => {
-      setDetailsFor((open) => (open === id ? null : open));
+      setExpandedId((open) => (open === id ? null : open));
       editRecords((current) => withoutRecord(current, id));
     },
     [editRecords],
@@ -307,24 +308,21 @@ export default function App() {
       0,
     );
 
-  const detailsRecord = useMemo(
-    () => state.records.find((record) => record.id === detailsFor) ?? null,
-    [detailsFor, state.records],
-  );
-  const detailsOpen = detailsRecord !== null;
-
+  // A record deleted from under an open panel must not leave it open.
   useEffect(() => {
-    void OBR.action.setWidth(
-      detailsOpen ? PANEL_WIDTH + DETAIL_WIDTH : PANEL_WIDTH,
-    );
-  }, [detailsOpen]);
+    if (expandedId === null) return;
+    if (!state.records.some((record) => record.id === expandedId)) {
+      setExpandedId(null);
+    }
+  }, [expandedId, state.records]);
 
+  // Fixed width; only needs setting in case an older build left it wider.
   useEffect(() => {
-    if (detailsFor !== null && detailsRecord === null) setDetailsFor(null);
-  }, [detailsFor, detailsRecord]);
+    void OBR.action.setWidth(PANEL_WIDTH);
+  }, []);
 
-  const toggleDetails = useCallback((id: string) => {
-    setDetailsFor((current) => (current === id ? null : id));
+  const toggleExpanded = useCallback((id: string) => {
+    setExpandedId((current) => (current === id ? null : id));
   }, []);
 
   /**
@@ -388,23 +386,40 @@ export default function App() {
       items={records.map((record) => record.id)}
       strategy={verticalListSortingStrategy}
     >
-      {records.map((record) => (
-        <RecordRow
-          key={record.id}
-          record={record}
-          token={
-            record.tokenId === null ? undefined : tokens.get(record.tokenId)
-          }
-          selected={
-            record.tokenId !== null && selection.includes(record.tokenId)
-          }
-          detailsOpen={detailsFor === record.id}
-          onStatChange={handleStatChange}
-          onAcChange={handleAcChange}
-          onNameChange={handleNameChange}
-          onToggleDetails={toggleDetails}
-        />
-      ))}
+      {records.map((record) => {
+        const token =
+          record.tokenId === null ? undefined : tokens.get(record.tokenId);
+        return (
+          <Fragment key={record.id}>
+            <RecordRow
+              record={record}
+              token={token}
+              selected={
+                record.tokenId !== null && selection.includes(record.tokenId)
+              }
+              expanded={expandedId === record.id}
+              onStatChange={handleStatChange}
+              onToggleExpanded={toggleExpanded}
+            />
+            {expandedId === record.id && (
+              <RecordDetails
+                record={record}
+                categories={visibleCategories}
+                token={token}
+                selectedToken={selectedToken}
+                onStatChange={handleStatChange}
+                onAcChange={handleAcChange}
+                onNameChange={handleNameChange}
+                onConditionsChange={handleConditionsChange}
+                onResourcesChange={handleResourcesChange}
+                onCategoryChange={handleCategoryChange}
+                onAssign={handleAssign}
+                onDelete={handleDelete}
+              />
+            )}
+          </Fragment>
+        );
+      })}
     </SortableContext>
   );
 
@@ -489,25 +504,6 @@ export default function App() {
           v{__APP_VERSION__}
         </footer>
       </div>
-
-      {detailsRecord !== null && (
-        <RecordDrawer
-          record={detailsRecord}
-          categories={visibleCategories}
-          token={
-            detailsRecord.tokenId === null
-              ? undefined
-              : tokens.get(detailsRecord.tokenId)
-          }
-          selectedToken={selectedToken}
-          onStatChange={handleStatChange}
-          onConditionsChange={handleConditionsChange}
-          onResourcesChange={handleResourcesChange}
-          onCategoryChange={handleCategoryChange}
-          onAssign={handleAssign}
-          onDelete={handleDelete}
-        />
-      )}
     </div>
   );
 }

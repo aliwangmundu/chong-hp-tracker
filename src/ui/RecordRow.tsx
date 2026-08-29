@@ -1,26 +1,21 @@
-import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import OBR from "@owlbear-rodeo/sdk";
 import { clampHp } from "@/core/inlineMath";
-import { RECORD_NAME_MAX_LENGTH } from "@/core/records";
 import type {
   AssignableToken,
   NumericStatKey,
   TrackedRecord,
 } from "@/core/types";
-import AcField from "./AcField";
 import StatField from "./StatField";
 
 type Props = {
   record: TrackedRecord;
   token: AssignableToken | undefined;
   selected: boolean;
-  detailsOpen: boolean;
+  expanded: boolean;
   onStatChange: (id: string, key: NumericStatKey, value: number) => void;
-  onAcChange: (id: string, value: string) => void;
-  onNameChange: (id: string, value: string) => void;
-  onToggleDetails: (id: string) => void;
+  onToggleExpanded: (id: string) => void;
 };
 
 /**
@@ -53,15 +48,20 @@ async function focusToken(id: string): Promise<void> {
   });
 }
 
+/**
+ * The always-visible line: token, name, HP.
+ *
+ * HP is the only thing editable here. Everything else — the name included —
+ * lives in the expanded panel, so a mistimed click during combat can cost you a
+ * hit point but never rename a character or unlink its token.
+ */
 export default function RecordRow({
   record,
   token,
   selected,
-  detailsOpen,
+  expanded,
   onStatChange,
-  onAcChange,
-  onNameChange,
-  onToggleDetails,
+  onToggleExpanded,
 }: Props) {
   const {
     attributes,
@@ -81,6 +81,7 @@ export default function RecordRow({
         "hover:bg-ink-100/70 dark:hover:bg-ink-900/60",
         isDragging ? "z-10 opacity-80 shadow-lg" : "",
         selected ? "bg-ink-100 dark:bg-ink-900" : "",
+        expanded ? "bg-ink-100/80 dark:bg-ink-900/80" : "",
       ].join(" ")}
       {...attributes}
       {...listeners}
@@ -90,7 +91,7 @@ export default function RecordRow({
         disabled={token === undefined}
         title={
           token === undefined
-            ? "No token linked — open the details to link one"
+            ? "No token linked — expand the row to link one"
             : `Focus ${token.name}`
         }
         onClick={() => {
@@ -118,11 +119,15 @@ export default function RecordRow({
         )}
       </button>
 
-      <NameField
-        value={record.name}
-        placeholder={token?.name || "Unnamed"}
-        onCommit={(next) => onNameChange(record.id, next)}
-      />
+      <span
+        className={[
+          "min-w-0 flex-1 truncate px-1 text-sm",
+          record.name === "" ? "text-ink-400 dark:text-ink-600" : "",
+        ].join(" ")}
+        title={record.name || token?.name || "Unnamed"}
+      >
+        {record.name || token?.name || "Unnamed"}
+      </span>
 
       <StatField
         label={`${record.name || "Record"} hit points`}
@@ -134,23 +139,16 @@ export default function RecordRow({
         }
       />
 
-      <AcField
-        label={`${record.name || "Record"} armor class`}
-        value={record.ac}
-        widthClass="w-10 shrink-0"
-        onCommit={(next) => onAcChange(record.id, next)}
-      />
-
       <button
         type="button"
-        aria-label={`Details for ${record.name || "record"}`}
-        aria-expanded={detailsOpen}
-        title="Token, extra HP, conditions and resources"
-        onClick={() => onToggleDetails(record.id)}
+        aria-label={`${expanded ? "Collapse" : "Expand"} ${record.name || "record"}`}
+        aria-expanded={expanded}
+        title={expanded ? "Collapse" : "Name, token, AC and more"}
+        onClick={() => onToggleExpanded(record.id)}
         onPointerDown={(event) => event.stopPropagation()}
         className={[
           "flex size-6 shrink-0 items-center justify-center rounded-md",
-          detailsOpen
+          expanded
             ? "bg-ink-300 text-ink-900 dark:bg-ink-700 dark:text-ink-50"
             : "text-ink-400 hover:bg-ink-200 hover:text-ink-800 dark:text-ink-600 dark:hover:bg-ink-800 dark:hover:text-ink-100",
         ].join(" ")}
@@ -163,74 +161,13 @@ export default function RecordRow({
           stroke="currentColor"
           strokeWidth="2.5"
           strokeLinecap="round"
+          strokeLinejoin="round"
           aria-hidden
+          className={expanded ? "rotate-180" : ""}
         >
-          <path d="M12 5v14M5 12h14" />
+          <path d="m6 9 6 6 6-6" />
         </svg>
       </button>
     </div>
-  );
-}
-
-/**
- * The record's name, edited in place.
- *
- * With no token to take a name from, this is the record's only identity — so it
- * is a field in the row rather than something buried in the details, and it
- * falls back to showing the linked token's name as placeholder text.
- */
-function NameField({
-  value,
-  placeholder,
-  onCommit,
-}: {
-  value: string;
-  placeholder: string;
-  onCommit: (next: string) => void;
-}) {
-  const [draft, setDraft] = useState<string | null>(null);
-
-  const commit = () => {
-    if (draft === null) return;
-    const next = draft.trim().slice(0, RECORD_NAME_MAX_LENGTH);
-    setDraft(null);
-    if (next !== value) onCommit(next);
-  };
-
-  return (
-    <input
-      type="text"
-      autoComplete="off"
-      spellCheck={false}
-      maxLength={RECORD_NAME_MAX_LENGTH}
-      placeholder={placeholder}
-      aria-label="Name"
-      value={draft ?? value}
-      title={value || placeholder}
-      className={[
-        "min-w-0 flex-1 truncate rounded-md border border-transparent bg-transparent",
-        "px-1 py-1 text-sm outline-none transition-colors",
-        "placeholder:text-ink-400 dark:placeholder:text-ink-600",
-        "hover:border-ink-200 dark:hover:border-ink-800",
-        "focus:border-ink-400 focus:bg-white focus:ring-2 focus:ring-ink-400/30",
-        "dark:focus:border-ink-500 dark:focus:bg-ink-950 dark:focus:ring-ink-500/30",
-      ].join(" ")}
-      onFocus={() => setDraft(value)}
-      onChange={(event) => setDraft(event.currentTarget.value)}
-      onBlur={commit}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          event.currentTarget.blur();
-          return;
-        }
-        if (event.key === "Escape") {
-          event.preventDefault();
-          setDraft(null);
-          event.currentTarget.blur();
-        }
-      }}
-      onPointerDown={(event) => event.stopPropagation()}
-    />
   );
 }

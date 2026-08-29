@@ -14,8 +14,11 @@ without it.
   record's details, and press **Link selected**. That is what gives the bubbles
   somewhere to draw. Unlink at any time — the record and its stats stay put.
   A token belongs to one record at a time; linking it elsewhere moves it.
-- **Three columns.** Name, HP, AC. Everything else is behind the `+` button on
-  the row. Drag rows to reorder; the order sticks with the scene.
+- **The row shows token, name and HP — and HP is the only thing you can edit
+  there.** Everything else opens in a panel underneath the row, which is also
+  the only place it can be changed. A mistimed click during combat can cost you
+  a hit point; it can never rename a character or unlink its token.
+  Drag rows to reorder; the order sticks with the scene.
 - **Categories, made by anyone.** The folder button adds one. Rename it in
   place, drag records into it, and hide the whole thing with the eye. Records
   not filed anywhere sit in an **Ungrouped** section at the top.
@@ -34,21 +37,19 @@ without it.
   `+ - * /` and parentheses work. An expression that will not parse flashes red
   and leaves the value alone rather than committing a wrong number.
 
-- **`+` on each row** toggles a second card open *beside* the list, widening
-  the popover rather than covering it, so the roster stays visible and usable
-  while you edit. The same `+` closes it, and it highlights while its card is
-  open.
-- **On that card:** extra HP (temporary hit points, added into the number on
-  the token) and max HP (caps the HP field, never drawn on the map). Both are
-  plain number fields — arithmetic entry is for HP only, where "-25" is what
-  you actually mean.
+- **The chevron on each row** expands it in place. Inside: the name, the token
+  link, the group, then AC, extra HP (temporary hit points, added into the
+  number on the token) and max HP (caps the HP field, never drawn on the map)
+  on one line, then conditions and resources. Extra and max are plain number
+  fields — arithmetic entry is for HP only, where "-25" is what you actually
+  mean.
 - **A round counter** sits above the list: `‹ Round 3 ›`. Advancing it counts
   every condition in the scene down by one; stepping back counts them up, so
   the two arrows undo each other.
-- **Conditions and resources**, any number of each, below max HP on the second
-  card. A condition is a name and a countdown the round drives. A resource is a
-  name and a counter only you move — mana, ki, charges, arrows — with `‹ ›`
-  either side of it. Both have a small `×` to remove them.
+- **Conditions and resources**, any number of each, at the bottom of the
+  expanded row. A condition is a name and a countdown the round drives. A
+  resource is a name and a counter only you move — mana, ki, charges, arrows —
+  with `‹ ›` either side of it. Both have a small `×` to remove them.
 - **Condition circles on the token.** Up to four along the top edge, each
   showing that condition's remaining duration, turning red at 0.
 - **Nothing carries between scenes.** Records live in the scene's metadata, so
@@ -147,14 +148,15 @@ src/ui/      the panel
 
 ### Notes on the design
 
-- **The popover resizes itself.** `manifest.json` sets the narrow width for the
-  list alone; opening a token's extra stats calls `OBR.action.setWidth` to grow
-  the window by exactly the second card's width. `PANEL_WIDTH` in
-  `src/ui/App.tsx` must stay in step with `action.width` in the manifest.
-- **No transition on the second card.** `setWidth` snaps, with no animated
-  form, so a card animating against a window that cannot animate with it reads
-  as jitter rather than motion. The card appears in one frame instead, and the
-  list is pinned to `PANEL_WIDTH` so it does not shift by a pixel either way.
+- **Details open inline, and the popover width never changes.** A second card
+  beside the list meant resizing the window on every open, and `setWidth` snaps
+  with no animated form — so the card could not move with it without reading as
+  jitter. Expanding under the row keeps the list in place and drops the problem
+  entirely. `PANEL_WIDTH` in `src/ui/App.tsx` and `action.width` in the manifest
+  just have to agree.
+- **Only HP is editable in the row.** Every other value is edit-on-expand. The
+  list is what you touch mid-combat, and the cost of a slip there should be a
+  number you can retype, not an identity you have to reconstruct.
 
 - **Records are the model; tokens are a link.** Stats live in one array in
   scene metadata, keyed by nothing but the record's own id. That is what lets a
