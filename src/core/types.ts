@@ -34,8 +34,8 @@ export type TrackedRecord = {
   ac: string;
   conditions: Condition[];
   resources: Resource[];
-  /** GM-only: keeps this line off everyone else's panel. */
-  hidden: boolean;
+  /** Category this record is filed under, or null for the ungrouped list. */
+  categoryId: string | null;
 };
 
 /** A scene token that a record can be linked to. */

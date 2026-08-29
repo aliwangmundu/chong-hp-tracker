@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   moveRecord,
+  moveRecordInto,
   newRecord,
   releaseToken,
   withRecord,
@@ -40,6 +41,45 @@ describe("moveRecord", () => {
   it("leaves the original array alone", () => {
     moveRecord(records, 0, 2);
     expect(records.map((r) => r.id)).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("moveRecordInto", () => {
+  const filed = [
+    { ...make("a"), categoryId: null },
+    { ...make("b"), categoryId: "cat" },
+    { ...make("c"), categoryId: null },
+  ];
+
+  it("files a record into a category and appends it", () => {
+    const next = moveRecordInto(filed, "a", "cat", null);
+    expect(next.map((r) => r.id)).toEqual(["b", "a", "c"]);
+    expect(next.find((r) => r.id === "a")?.categoryId).toBe("cat");
+  });
+
+  it("inserts in front of the row it was dropped on", () => {
+    const next = moveRecordInto(filed, "c", "cat", "b");
+    expect(next.map((r) => r.id)).toEqual(["a", "c", "b"]);
+    expect(next.find((r) => r.id === "c")?.categoryId).toBe("cat");
+  });
+
+  it("appends to the end when the category is empty", () => {
+    const next = moveRecordInto(filed, "a", "other", null);
+    expect(next.map((r) => r.id)).toEqual(["b", "c", "a"]);
+  });
+
+  it("unfiles a record back to the ungrouped list", () => {
+    const next = moveRecordInto(filed, "b", null, null);
+    expect(next.find((r) => r.id === "b")?.categoryId).toBe(null);
+  });
+
+  it("is a no-op for an unknown record", () => {
+    expect(moveRecordInto(filed, "zzz", "cat", null)).toBe(filed);
+  });
+
+  it("leaves the original array alone", () => {
+    moveRecordInto(filed, "a", "cat", null);
+    expect(filed.map((r) => r.id)).toEqual(["a", "b", "c"]);
   });
 });
 

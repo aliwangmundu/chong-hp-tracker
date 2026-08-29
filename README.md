@@ -16,6 +16,9 @@ without it.
   A token belongs to one record at a time; linking it elsewhere moves it.
 - **Three columns.** Name, HP, AC. Everything else is behind the `+` button on
   the row. Drag rows to reorder; the order sticks with the scene.
+- **Categories, made by anyone.** The folder button adds one. Rename it in
+  place, drag records into it, and hide the whole thing with the eye. Records
+  not filed anywhere sit in an **Ungrouped** section at the top.
 - **AC is free text.** Three characters, so `18`, `M` and `?` are all fine.
 - **Inline math in the HP field.** Click into HP and keep typing:
 
@@ -50,10 +53,11 @@ without it.
   showing that condition's remaining duration, turning red at 0.
 - **Nothing carries between scenes.** Records live in the scene's metadata, so
   each scene has its own list.
-- **Hide a record from players.** A GM-only button in the details takes that one
-  line off everyone else's panel. Bubbles on its token are unaffected, so a
-  monster still shows HP and AC on the map — the roster line is what hides, not
-  the numbers.
+- **Hiding is a property of the category.** Players never see a hidden category
+  or anything in it; the GM always sees every one. New categories start hidden,
+  so staging the next wave takes one step and reveals in one click. Bubbles on
+  the linked tokens are unaffected — a monster still shows HP and AC on the map;
+  the roster line is what hides, not the numbers.
 - **Bubbles on the linked token.** HP bottom-left in red, AC bottom-right in
   slate. HP always draws, because linking a token is the deliberate act that
   says "put this one on the map"; AC appears once you fill it in. An unlinked
@@ -70,7 +74,7 @@ npm install
 npm run dev       # http://localhost:5173
 npm test          # unit tests
 npm run typecheck
-npm run build     # → dist/
+npm run build     # → docs/  (nothing is published until you run this)
 ```
 
 To try your changes, run `npm run dev`, then in an Owlbear room choose
@@ -136,7 +140,7 @@ index.html       landing page that prints the install URL
 ```
 
 ```
-src/core/    records, inline math, AC, entries, settings, token lookup
+src/core/    records, categories, inline math, AC, entries, settings, tokens
 src/obr/     bounds maths, bubble builders, the sync loop
 src/ui/      the panel
 ```
@@ -168,6 +172,16 @@ src/ui/      the panel
 - **Linking is exclusive.** Assigning a token clears it from any other record
   first. Two records pointing at one token would draw two sets of bubbles on
   top of each other.
+- **New categories start hidden, and unreadable ones parse as hidden.** Both
+  defaults fail the same way on purpose: revealing something by accident cannot
+  be undone, and the usual reason to make a category mid-session is to stage
+  what the party should not see yet.
+- **Records and categories are written together.** They are separate metadata
+  keys but not independent — deleting a category has to unfile its records in
+  the same breath, or a refresh landing between two writes would leave rows
+  pointing at nothing. `setMetadata` takes both keys in one call.
+- **A record filed under a deleted category falls back to Ungrouped** rather
+  than vanishing. Losing a category should never lose the thing inside it.
 - **The sync loop diffs.** It compares a signature string per token and only
   rebuilds bubbles whose geometry or stats actually moved.
 - **Bubbles key off metadata presence, not value.** A monster knocked to 0 HP
@@ -191,7 +205,9 @@ src/ui/      the panel
 
 - AC allows three characters — `AC_MAX_LENGTH` in `src/core/ac.ts`.
 - Record names cap at 32 characters — `RECORD_NAME_MAX_LENGTH` in
-  `src/core/records.ts`.
+  `src/core/records.ts`; category names at 24 —
+  `CATEGORY_NAME_MAX_LENGTH` in `src/core/categories.ts`.
+- New categories start hidden — `newCategory` in `src/core/categories.ts`.
 - Condition and resource names cap at 24 characters —
   `ENTRY_NAME_MAX_LENGTH` in `src/core/entries.ts`.
 - Four condition circles per token — `MAX_CONDITION_BUBBLES` in

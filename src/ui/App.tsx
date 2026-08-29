@@ -7,10 +7,12 @@ import {
 } from "react";
 import OBR, { type Item, type Metadata } from "@owlbear-rodeo/sdk";
 import {
+  type CollisionDetection,
   DndContext,
   type DragEndEvent,
   PointerSensor,
   closestCenter,
+  pointerWithin,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
@@ -19,17 +21,26 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import {
+  type CategoryDef,
+  newCategory,
+  withCategory,
+  withoutCategory,
+} from "@/core/categories";
 import { stepDurations } from "@/core/entries";
 import {
-  moveRecord,
+  moveRecordInto,
   newRecord,
-  parseRecords,
   releaseToken,
   statPatch,
   withRecord,
   withoutRecord,
 } from "@/core/records";
-import { updateRecords } from "@/core/recordStore";
+import {
+  type TrackerState,
+  parseState,
+  updateState,
+} from "@/core/recordStore";
 import { FIRST_ROUND, parseSettings, setRound } from "@/core/settings";
 import { indexTokens, isAssignableItem } from "@/core/tokens";
 import type {
@@ -39,6 +50,9 @@ import type {
   Resource,
   TrackedRecord,
 } from "@/core/types";
+import CategorySection, {
+  categoryFromDroppableId,
+} from "./CategorySection";
 import RecordDrawer, { DETAIL_WIDTH } from "./RecordDrawer";
 import RecordRow from "./RecordRow";
 import RoundBar from "./RoundBar";
@@ -51,8 +65,10 @@ import RoundBar from "./RoundBar";
  */
 const PANEL_WIDTH = 288;
 
+const EMPTY_STATE: TrackerState = { records: [], categories: [] };
+
 export default function App() {
-  const [records, setRecords] = useState<TrackedRecord[]>([]);
+  const [state, setState] = useState<TrackerState>(EMPTY_STATE);
   const [tokens, setTokens] = useState(new Map<string, AssignableToken>());
   const [selection, setSelection] = useState<string[]>([]);
   const [sceneReady, setSceneReady] = useState(false);
@@ -70,7 +86,7 @@ export default function App() {
         void OBR.scene.items.getItems(isAssignableItem).then(update);
       } else {
         setTokens(new Map());
-        setRecords([]);
+        setState(EMPTY_STATE);
       }
     };
 
@@ -84,11 +100,11 @@ export default function App() {
     };
   }, []);
 
-  // Records and settings both live in scene metadata.
+  // Records, categories and the round all live in scene metadata.
   useEffect(() => {
     if (!sceneReady) return;
     const apply = (metadata: Metadata) => {
-      setRecords(parseRecords(metadata));
+      setState(parseState(metadata));
       setRoundState(parseSettings(metadata).round);
     };
     void OBR.scene.getMetadata().then(apply);
@@ -112,12 +128,6 @@ export default function App() {
     return OBR.theme.onChange((theme) => apply(theme.mode));
   }, []);
 
-  /** Hidden records stay on the GM's panel and vanish from everyone else's. */
-  const visible = useMemo(
-    () => (isGm ? records : records.filter((record) => !record.hidden)),
-    [isGm, records],
-  );
-
   /**
    * Optimistic write.
    *
@@ -126,78 +136,105 @@ export default function App() {
    * different records do not overwrite each other.
    */
   const edit = useCallback(
-    (mutate: (records: TrackedRecord[]) => TrackedRecord[]) => {
-      setRecords(mutate);
-      void updateRecords(mutate);
+    (mutate: (state: TrackerState) => TrackerState) => {
+      setState(mutate);
+      void updateState(mutate);
     },
     [],
   );
 
+  const editRecords = useCallback(
+    (mutate: (records: TrackedRecord[]) => TrackedRecord[]) =>
+      edit((current) => ({ ...current, records: mutate(current.records) })),
+    [edit],
+  );
+
+  const editCategories = useCallback(
+    (mutate: (categories: CategoryDef[]) => CategoryDef[]) =>
+      edit((current) => ({
+        ...current,
+        categories: mutate(current.categories),
+      })),
+    [edit],
+  );
+
   const addRecord = useCallback(() => {
     const record = newRecord();
-    edit((current) => [...current, record]);
+    editRecords((current) => [...current, record]);
     setDetailsFor(record.id);
-  }, [edit]);
+  }, [editRecords]);
+
+  const addCategory = useCallback(() => {
+    editCategories((current) => [...current, newCategory()]);
+  }, [editCategories]);
+
+  /** Deleting a category unfiles its records rather than taking them with it. */
+  const deleteCategory = useCallback(
+    (id: string) =>
+      edit((current) => ({
+        categories: withoutCategory(current.categories, id),
+        records: current.records.map((record) =>
+          record.categoryId === id ? { ...record, categoryId: null } : record,
+        ),
+      })),
+    [edit],
+  );
 
   const handleStatChange = useCallback(
     (id: string, key: NumericStatKey, value: number) =>
-      edit((current) => withRecord(current, id, statPatch(key, value))),
-    [edit],
+      editRecords((current) => withRecord(current, id, statPatch(key, value))),
+    [editRecords],
   );
 
   const handleAcChange = useCallback(
     (id: string, ac: string) =>
-      edit((current) => withRecord(current, id, { ac })),
-    [edit],
+      editRecords((current) => withRecord(current, id, { ac })),
+    [editRecords],
   );
 
   const handleNameChange = useCallback(
     (id: string, name: string) =>
-      edit((current) => withRecord(current, id, { name })),
-    [edit],
+      editRecords((current) => withRecord(current, id, { name })),
+    [editRecords],
   );
 
   const handleConditionsChange = useCallback(
     (id: string, conditions: Condition[]) =>
-      edit((current) => withRecord(current, id, { conditions })),
-    [edit],
+      editRecords((current) => withRecord(current, id, { conditions })),
+    [editRecords],
   );
 
   const handleResourcesChange = useCallback(
     (id: string, resources: Resource[]) =>
-      edit((current) => withRecord(current, id, { resources })),
-    [edit],
+      editRecords((current) => withRecord(current, id, { resources })),
+    [editRecords],
   );
 
-  const handleToggleHidden = useCallback(
-    (id: string) =>
-      edit((current) =>
-        current.map((record) =>
-          record.id === id ? { ...record, hidden: !record.hidden } : record,
-        ),
-      ),
-    [edit],
+  const handleCategoryChange = useCallback(
+    (id: string, categoryId: string | null) =>
+      editRecords((current) => withRecord(current, id, { categoryId })),
+    [editRecords],
   );
 
   const handleDelete = useCallback(
     (id: string) => {
       setDetailsFor((open) => (open === id ? null : open));
-      edit((current) => withoutRecord(current, id));
+      editRecords((current) => withoutRecord(current, id));
     },
-    [edit],
+    [editRecords],
   );
 
   /** Linking is exclusive: a token belongs to one record at a time. */
   const handleAssign = useCallback(
     (id: string, tokenId: string | null) =>
-      edit((current) =>
+      editRecords((current) =>
         withRecord(
           tokenId === null ? current : releaseToken(current, tokenId),
           id,
           { tokenId },
         ),
       ),
-    [edit],
+    [editRecords],
   );
 
   /**
@@ -212,21 +249,67 @@ export default function App() {
       if (next === round) return;
 
       setRoundState(next);
-      edit((current) =>
+      editRecords((current) =>
         current.map((record) =>
           record.conditions.length === 0
             ? record
-            : { ...record, conditions: stepDurations(record.conditions, -delta) },
+            : {
+                ...record,
+                conditions: stepDurations(record.conditions, -delta),
+              },
         ),
       );
       void setRound(next).catch(() => setRoundState(round));
     },
-    [edit, round],
+    [editRecords, round],
   );
 
+  /**
+   * What this person is allowed to see.
+   *
+   * The GM sees every category. Everyone else sees the ungrouped list plus any
+   * category not marked hidden — and a record filed under a category that has
+   * since been deleted falls back to ungrouped rather than vanishing.
+   */
+  const visibleCategories = useMemo(
+    () =>
+      isGm
+        ? state.categories
+        : state.categories.filter((category) => !category.hidden),
+    [isGm, state.categories],
+  );
+
+  const groups = useMemo(() => {
+    const known = new Set(state.categories.map((category) => category.id));
+    const allowed = new Set(visibleCategories.map((category) => category.id));
+
+    const ungrouped: TrackedRecord[] = [];
+    const byCategory = new Map<string, TrackedRecord[]>();
+    for (const category of visibleCategories) byCategory.set(category.id, []);
+
+    for (const record of state.records) {
+      const id = record.categoryId;
+      if (id === null || !known.has(id)) {
+        ungrouped.push(record);
+        continue;
+      }
+      if (!allowed.has(id)) continue;
+      byCategory.get(id)?.push(record);
+    }
+
+    return { ungrouped, byCategory };
+  }, [state.categories, state.records, visibleCategories]);
+
+  const visibleCount =
+    groups.ungrouped.length +
+    [...groups.byCategory.values()].reduce(
+      (total, list) => total + list.length,
+      0,
+    );
+
   const detailsRecord = useMemo(
-    () => records.find((record) => record.id === detailsFor) ?? null,
-    [detailsFor, records],
+    () => state.records.find((record) => record.id === detailsFor) ?? null,
+    [detailsFor, state.records],
   );
   const detailsOpen = detailsRecord !== null;
 
@@ -244,6 +327,23 @@ export default function App() {
     setDetailsFor((current) => (current === id ? null : id));
   }, []);
 
+  /**
+   * Rows beat sections.
+   *
+   * A category section is a large droppable, so plain closestCenter will often
+   * pick it over the row the pointer is actually on and every drop would land
+   * at the end of the list.
+   */
+  const collisionDetection = useCallback<CollisionDetection>((args) => {
+    const under = pointerWithin(args);
+    const rows = under.filter(
+      (collision) => !String(collision.id).startsWith("category:"),
+    );
+    if (rows.length > 0) return rows;
+    if (under.length > 0) return under;
+    return closestCenter(args);
+  }, []);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       // Enough travel that clicking into a field never starts a drag.
@@ -254,15 +354,27 @@ export default function App() {
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
-      if (over === null || active.id === over.id) return;
+      if (over === null) return;
 
-      const from = records.findIndex((record) => record.id === active.id);
-      const to = records.findIndex((record) => record.id === over.id);
-      if (from === -1 || to === -1) return;
+      const activeId = String(active.id);
+      const overId = String(over.id);
+      if (activeId === overId) return;
 
-      edit((current) => moveRecord(current, from, to));
+      const asSection = categoryFromDroppableId(overId);
+      if (asSection !== undefined) {
+        editRecords((current) =>
+          moveRecordInto(current, activeId, asSection, null),
+        );
+        return;
+      }
+
+      const target = state.records.find((record) => record.id === overId);
+      if (target === undefined) return;
+      editRecords((current) =>
+        moveRecordInto(current, activeId, target.categoryId, overId),
+      );
     },
-    [edit, records],
+    [editRecords, state.records],
   );
 
   /** Linking needs exactly one token selected; two is ambiguous. */
@@ -270,6 +382,31 @@ export default function App() {
     if (selection.length !== 1) return undefined;
     return tokens.get(selection[0] ?? "");
   }, [selection, tokens]);
+
+  const renderRows = (records: TrackedRecord[]) => (
+    <SortableContext
+      items={records.map((record) => record.id)}
+      strategy={verticalListSortingStrategy}
+    >
+      {records.map((record) => (
+        <RecordRow
+          key={record.id}
+          record={record}
+          token={
+            record.tokenId === null ? undefined : tokens.get(record.tokenId)
+          }
+          selected={
+            record.tokenId !== null && selection.includes(record.tokenId)
+          }
+          detailsOpen={detailsFor === record.id}
+          onStatChange={handleStatChange}
+          onAcChange={handleAcChange}
+          onNameChange={handleNameChange}
+          onToggleDetails={toggleDetails}
+        />
+      ))}
+    </SortableContext>
+  );
 
   return (
     <div className="app-surface flex h-full overflow-hidden">
@@ -281,48 +418,67 @@ export default function App() {
           round={round}
           onStep={stepRound}
           canStepBack={round > FIRST_ROUND}
-          onAdd={addRecord}
+          onAddRecord={addRecord}
+          onAddCategory={addCategory}
         />
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">
           {!sceneReady ? (
             <Placeholder>Open a scene to start tracking.</Placeholder>
-          ) : visible.length === 0 ? (
+          ) : visibleCount === 0 && visibleCategories.length === 0 ? (
             <Placeholder>
               Add a record with <strong>+</strong>, then link a token to it.
             </Placeholder>
           ) : (
             <DndContext
               sensors={sensors}
-              collisionDetection={closestCenter}
+              collisionDetection={collisionDetection}
               modifiers={[restrictToFirstScrollableAncestor]}
               onDragEnd={handleDragEnd}
             >
-              <SortableContext
-                items={visible.map((record) => record.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {visible.map((record) => (
-                  <RecordRow
-                    key={record.id}
-                    record={record}
-                    token={
-                      record.tokenId === null
-                        ? undefined
-                        : tokens.get(record.tokenId)
+              {groups.ungrouped.length > 0 && (
+                <CategorySection
+                  categoryId={null}
+                  name="Ungrouped"
+                  hidden={false}
+                  count={groups.ungrouped.length}
+                  editable={false}
+                  onRename={() => {}}
+                  onToggleHidden={() => {}}
+                  onDelete={() => {}}
+                >
+                  {renderRows(groups.ungrouped)}
+                </CategorySection>
+              )}
+
+              {visibleCategories.map((category) => {
+                const records = groups.byCategory.get(category.id) ?? [];
+                return (
+                  <CategorySection
+                    key={category.id}
+                    categoryId={category.id}
+                    name={category.name}
+                    hidden={category.hidden}
+                    count={records.length}
+                    editable
+                    onRename={(name) =>
+                      editCategories((current) =>
+                        withCategory(current, category.id, { name }),
+                      )
                     }
-                    selected={
-                      record.tokenId !== null &&
-                      selection.includes(record.tokenId)
+                    onToggleHidden={() =>
+                      editCategories((current) =>
+                        withCategory(current, category.id, {
+                          hidden: !category.hidden,
+                        }),
+                      )
                     }
-                    detailsOpen={detailsFor === record.id}
-                    onStatChange={handleStatChange}
-                    onAcChange={handleAcChange}
-                    onNameChange={handleNameChange}
-                    onToggleDetails={toggleDetails}
-                  />
-                ))}
-              </SortableContext>
+                    onDelete={() => deleteCategory(category.id)}
+                  >
+                    {renderRows(records)}
+                  </CategorySection>
+                );
+              })}
             </DndContext>
           )}
         </main>
@@ -337,18 +493,18 @@ export default function App() {
       {detailsRecord !== null && (
         <RecordDrawer
           record={detailsRecord}
+          categories={visibleCategories}
           token={
             detailsRecord.tokenId === null
               ? undefined
               : tokens.get(detailsRecord.tokenId)
           }
           selectedToken={selectedToken}
-          isGm={isGm}
           onStatChange={handleStatChange}
           onConditionsChange={handleConditionsChange}
           onResourcesChange={handleResourcesChange}
+          onCategoryChange={handleCategoryChange}
           onAssign={handleAssign}
-          onToggleHidden={handleToggleHidden}
           onDelete={handleDelete}
         />
       )}

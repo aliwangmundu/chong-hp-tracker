@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { clampExtraHp, clampMaxHp } from "@/core/inlineMath";
+import type { CategoryDef } from "@/core/categories";
 import type {
   AssignableToken,
   Condition,
@@ -16,15 +17,16 @@ export const DETAIL_WIDTH = 260;
 
 type Props = {
   record: TrackedRecord;
+  /** Categories this person can see, so a player cannot file into a hidden one. */
+  categories: CategoryDef[];
   token: AssignableToken | undefined;
   /** The token currently selected on the map, if exactly one is. */
   selectedToken: AssignableToken | undefined;
-  isGm: boolean;
   onStatChange: (id: string, key: NumericStatKey, value: number) => void;
   onConditionsChange: (id: string, next: Condition[]) => void;
   onResourcesChange: (id: string, next: Resource[]) => void;
+  onCategoryChange: (id: string, categoryId: string | null) => void;
   onAssign: (id: string, tokenId: string | null) => void;
-  onToggleHidden: (id: string) => void;
   onDelete: (id: string) => void;
 };
 
@@ -36,14 +38,14 @@ type Props = {
  */
 export default function RecordDrawer({
   record,
+  categories,
   token,
   selectedToken,
-  isGm,
   onStatChange,
   onConditionsChange,
   onResourcesChange,
+  onCategoryChange,
   onAssign,
-  onToggleHidden,
   onDelete,
 }: Props) {
   return (
@@ -116,6 +118,37 @@ export default function RecordDrawer({
           </div>
         </section>
 
+        <label className="flex items-center gap-2">
+          <span className="text-xs text-ink-500 dark:text-ink-400">
+            Category
+          </span>
+          <select
+            value={record.categoryId ?? ""}
+            onChange={(event) =>
+              onCategoryChange(
+                record.id,
+                event.currentTarget.value === ""
+                  ? null
+                  : event.currentTarget.value,
+              )
+            }
+            className={[
+              "min-w-0 flex-1 rounded-md border px-1.5 py-1 text-xs outline-none transition-colors",
+              "border-ink-200 bg-white text-ink-900 hover:border-ink-300",
+              "dark:border-ink-800 dark:bg-ink-950 dark:text-ink-100 dark:hover:border-ink-700",
+              "focus:border-ink-400 focus:ring-2 focus:ring-ink-400/30",
+            ].join(" ")}
+          >
+            <option value="">Ungrouped</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name || "Untitled"}
+                {category.hidden ? " (hidden)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+
         {/* Extra and max share one line — two secondary numbers do not deserve
             a stacked row each when the card has lists to fit below them. */}
         <div className="flex items-center gap-2">
@@ -154,20 +187,6 @@ export default function RecordDrawer({
         />
 
         <section className="space-y-1 border-t border-ink-200 pt-3 dark:border-ink-800">
-          {isGm && (
-            <SmallButton
-              title={
-                record.hidden
-                  ? "Players cannot see this line. Click to reveal it."
-                  : "Players can see this line. Click to hide it."
-              }
-              active={record.hidden}
-              onClick={() => onToggleHidden(record.id)}
-            >
-              {record.hidden ? "Hidden from players" : "Hide from players"}
-            </SmallButton>
-          )}
-
           <SmallButton
             danger
             title="Delete this record. The token itself is untouched."

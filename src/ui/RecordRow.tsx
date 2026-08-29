@@ -81,7 +81,6 @@ export default function RecordRow({
         "hover:bg-ink-100/70 dark:hover:bg-ink-900/60",
         isDragging ? "z-10 opacity-80 shadow-lg" : "",
         selected ? "bg-ink-100 dark:bg-ink-900" : "",
-        record.hidden ? "opacity-60" : "",
       ].join(" ")}
       {...attributes}
       {...listeners}

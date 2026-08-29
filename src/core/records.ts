@@ -24,7 +24,7 @@ export function newRecord(name = ""): TrackedRecord {
     ac: "",
     conditions: [],
     resources: [],
-    hidden: false,
+    categoryId: null,
   };
 }
 
@@ -100,10 +100,53 @@ export function parseRecords(
         source["resources"],
         (entry, id, name) => ({ id, name, value: readInt(entry, "value") }),
       ),
-      hidden: source["hidden"] === true,
+      categoryId:
+        typeof source["categoryId"] === "string"
+          ? source["categoryId"]
+          : null,
     });
   }
   return records;
+}
+
+/**
+ * Moves a record into a category, optionally in front of a specific row.
+ *
+ * The flat array is still the ordering; grouping for display just reads
+ * `categoryId`. Dropping onto a row inserts at that row's position, dropping
+ * onto a section appends after the last record already filed there.
+ */
+export function moveRecordInto(
+  records: TrackedRecord[],
+  id: string,
+  categoryId: string | null,
+  beforeId: string | null,
+): TrackedRecord[] {
+  const from = records.findIndex((record) => record.id === id);
+  if (from === -1) return records;
+
+  const next = [...records];
+  const [moved] = next.splice(from, 1);
+  if (moved === undefined) return records;
+  const updated = { ...moved, categoryId };
+
+  if (beforeId !== null) {
+    const to = next.findIndex((record) => record.id === beforeId);
+    if (to !== -1) {
+      next.splice(to, 0, updated);
+      return next;
+    }
+  }
+
+  let insert = next.length;
+  for (let index = next.length - 1; index >= 0; index -= 1) {
+    if (next[index]?.categoryId === categoryId) {
+      insert = index + 1;
+      break;
+    }
+  }
+  next.splice(insert, 0, updated);
+  return next;
 }
 
 /** Moves a record to a new position, returning a new array. */
