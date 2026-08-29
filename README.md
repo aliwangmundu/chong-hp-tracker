@@ -21,10 +21,13 @@ without it.
   a hit point; it can never rename a character or unlink its token.
   Drag rows to reorder; the order sticks.
 - **Two tabs, Player and DM.** The DM view is the workshop — categories, Chosen,
-  drag-to-file. The player view is a flat roster with a damage box and nothing
-  else. Both are open to everyone; your role only picks which one opens first.
-- **A damage box beside HP in the player view.** Type `+8` or `-5` and press
-  Enter. The sign is required — `12` is refused rather than guessed at.
+  drag-to-file. The player view is a flat roster with the damage button and
+  nothing else. Both are open to everyone; your role only picks which one opens
+  first.
+- **A one-press damage button beside HP, in the player view.** It applies
+  whatever signed number is in that record's **AC** field: put `-5` there and
+  every press takes five off. The sign is required, so a plain `18` leaves the
+  button greyed out — which is also what an ordinary armour class does.
 - **Chosen**, in the DM view, pinned at the top and not removable. It mirrors
   your map selection: select a token and its record appears there, deselect and
   it goes back. It is the same record either way — editing it in Chosen edits
@@ -48,7 +51,9 @@ without it.
   So `Goblin x8 7/7 ac 15 #wave1` is eight goblins in a new hidden category.
   It parses as you type and tells you what it will add before you commit;
   `Ctrl+Enter` adds, `Esc` closes. Lines starting `//` are ignored.
-- **AC is free text.** Three characters, so `18`, `M` and `?` are all fine.
+- **AC is free text.** Three characters, so `18`, `M` and `?` are all fine —
+  and a signed `-5` doubles as the amount the player view's damage button
+  applies.
 - **Inline math in the HP field.** Click into HP and keep typing:
 
   | current | you type   | result |
@@ -69,7 +74,7 @@ without it.
   number on the token) and max HP (caps the HP field, never drawn on the map)
   on one line. Extra and max are plain number fields — arithmetic entry is for
   HP only, where "-25" is what you actually mean.
-- **A round counter** sits above the list: `‹ Round 3 ›`. Advancing it counts
+- **A round counter** sits top left: `Round 3 ‹ ›`. Advancing it counts
   every condition on every record down by one; stepping back counts them up, so
   the two arrows undo each other.
 - **Conditions**, any number of them, near the top of the expanded row — the
@@ -188,10 +193,14 @@ src/ui/      the panel
 - **Chosen is per-person and never stored.** It mirrors your map selection, and
   a selection is already yours alone; writing it to the room would mean two
   players fighting over one highlight.
-- **The damage box demands a sign.** `12` could reasonably mean twelve damage
-  or twelve healing, and picking one silently is how a boss loses its health to
-  a hasty keystroke. It also keeps the box unambiguously different from the HP
-  field beside it, which takes an absolute value.
+- **The damage button demands a sign.** `15` could mean fifteen damage or
+  fifteen healing, and picking one silently is how a character loses a fight to
+  a stray click. Requiring `+` or `-` also means a record using AC as an actual
+  armour class simply shows a disabled button rather than doing something
+  surprising.
+- **A button, not a field.** The amount is a property of the character that
+  rarely changes, so it is set once where the other numbers live and then
+  applied with one click for the rest of the fight.
 - **The player view has no drag.** With the sections gone there is nothing to
   drag between, and reordering a filtered list would shuffle records the player
   cannot see.

@@ -7,7 +7,7 @@ import type {
   NumericStatKey,
   TrackedRecord,
 } from "@/core/types";
-import AdjustField from "./AdjustField";
+import AdjustButton from "./AdjustButton";
 import StatField from "./StatField";
 
 type Props = {
@@ -17,7 +17,7 @@ type Props = {
   selectedToken: AssignableToken | undefined;
   selected: boolean;
   expanded: boolean;
-  /** The player view gets a damage box; the DM view keeps the row narrow. */
+  /** The player view gets the AC-driven damage button; the DM view does not. */
   showAdjust?: boolean;
   onStatChange: (id: string, key: NumericStatKey, value: number) => void;
   onToggleExpanded: (id: string) => void;
@@ -180,8 +180,9 @@ export default function RecordRow({
       />
 
       {showAdjust && (
-        <AdjustField
-          label={`Damage or heal ${record.name || "record"}`}
+        <AdjustButton
+          value={record.ac}
+          label={`Apply ${record.name || "record"}'s AC amount`}
           onAdjust={(delta) =>
             onStatChange(
               record.id,

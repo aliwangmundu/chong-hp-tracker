@@ -27,22 +27,22 @@ export default function RoundBar({
   commandOpen,
 }: Props) {
   return (
-    <div className="flex shrink-0 items-center gap-1 border-b border-ink-200 px-2 py-1.5 dark:border-ink-800">
-      <div className="flex-1" />
-      <Arrow
-        direction="back"
-        disabled={!canStepBack}
-        onClick={() => onStep(-1)}
-      />
-
-      <span className="px-1 text-[11px] font-medium uppercase tracking-wider text-ink-400 dark:text-ink-500">
+    <div className="flex shrink-0 items-center gap-1 px-2 py-1.5">
+      <span className="text-[11px] font-medium uppercase tracking-wider text-ink-400 dark:text-ink-500">
         Round
       </span>
-      <span className="min-w-[1.5rem] text-center text-sm font-semibold tabular-nums">
-        {round}
-      </span>
+      <span className="text-sm font-semibold tabular-nums">{round}</span>
 
-      <Arrow direction="forward" onClick={() => onStep(1)} />
+      {/* Both arrows together to the right of the number, rather than one
+          either side — the pair reads as one control that way. */}
+      <div className="flex items-center">
+        <Arrow
+          direction="back"
+          disabled={!canStepBack}
+          onClick={() => onStep(-1)}
+        />
+        <Arrow direction="forward" onClick={() => onStep(1)} />
+      </div>
 
       <div className="flex flex-1 items-center justify-end gap-0.5">
         <AddButton

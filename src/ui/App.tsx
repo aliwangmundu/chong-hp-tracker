@@ -563,8 +563,6 @@ export default function App() {
         className="flex h-full shrink-0 flex-col"
         style={{ width: PANEL_WIDTH }}
       >
-        <ViewTabs view={view} onChange={chooseView} />
-
         <RoundBar
           round={state.round}
           onStep={stepRound}
@@ -574,6 +572,8 @@ export default function App() {
           onToggleCommand={() => setCommandOpen((open) => !open)}
           commandOpen={commandOpen}
         />
+
+        <ViewTabs view={view} onChange={chooseView} />
 
         {commandOpen && (
           <CommandBar

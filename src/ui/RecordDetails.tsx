@@ -109,6 +109,7 @@ export default function RecordDetails({
           <InlineStat label="AC">
             <AcField
               label={`${record.name || "Record"} armor class`}
+              title="Armour class. A signed value like +8 or -5 also drives the button beside HP in the player view."
               value={record.ac}
               widthClass="w-10"
               onCommit={(next) => onAcChange(record.id, next)}

@@ -18,7 +18,7 @@ export default function ViewTabs({ view, onChange }: Props) {
     <div
       role="tablist"
       aria-label="View"
-      className="flex shrink-0 gap-1 px-2 pb-1 pt-2"
+      className="flex shrink-0 gap-1 border-b border-ink-200 px-2 pb-1.5 dark:border-ink-800"
     >
       <Tab active={view === "PLAYER"} onClick={() => onChange("PLAYER")}>
         Player

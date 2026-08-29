@@ -6,6 +6,8 @@ type Props = {
   onCommit: (next: string) => void;
   label: string;
   widthClass?: string;
+  /** Overrides the hover text; the label is used when omitted. */
+  title?: string;
 };
 
 /**
@@ -20,6 +22,7 @@ export default function AcField({
   onCommit,
   label,
   widthClass = "w-12",
+  title,
 }: Props) {
   const [draft, setDraft] = useState<string | null>(null);
   const shown = draft ?? value;
@@ -38,7 +41,7 @@ export default function AcField({
       spellCheck={false}
       maxLength={AC_MAX_LENGTH}
       aria-label={label}
-      title={label}
+      title={title ?? label}
       value={shown}
       className={[
         widthClass,
