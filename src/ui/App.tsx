@@ -394,6 +394,12 @@ export default function App() {
             </DndContext>
           )}
         </main>
+
+        {/* Which build is actually running. The quickest way to tell a stale
+            deploy from a real bug. */}
+        <footer className="shrink-0 px-3 pb-1 text-right text-[10px] tabular-nums text-ink-300 dark:text-ink-700">
+          v{__APP_VERSION__}
+        </footer>
       </div>
 
       {detailsToken !== null && (

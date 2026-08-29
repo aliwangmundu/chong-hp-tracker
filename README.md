@@ -95,12 +95,32 @@ two `index.html` files never collide.
 5. Install in Owlbear from
    `https://<your-username>.github.io/<your-repo-name>/manifest.json`
 
-To publish a change: edit, `npm run build`, re-upload `docs`.
+### Publishing a change
 
-Filenames in `docs/assets/` carry a content hash, so old ones linger after an
-upload. Harmless, but browsers cache the HTML that points at them for ten
-minutes — if a change does not show up, that cache is why. Removing and re-adding
-the extension in Owlbear clears it fastest.
+`docs/` is build output. Editing `src/` does **not** change it — only
+`npm run build` does, and forgetting that step publishes the previous build
+while everything looks like it worked.
+
+1. Bump `version` in `package.json`.
+2. `npm run build`
+3. Commit and push `docs/`.
+4. Open the panel in Owlbear and check the version in the bottom corner.
+
+That version is the whole point of this loop. It is stamped into the panel, into
+`manifest.json`, and onto every URL the manifest points at — so if the number
+you see is not the number you built, you are looking at a stale deploy, not a
+bug in the code.
+
+Filenames in `docs/assets/` already carry a content hash, so those are never
+stale. The HTML that points at them is the problem: GitHub Pages sends
+`Cache-Control: max-age=600` and gives you no way to change it, which is why a
+change can appear to take ten minutes to land. The `?v=` on each manifest URL
+sidesteps that — a new version is a new URL, and a new URL cannot be in the
+cache.
+
+The one thing still subject to that ten-minute cache is `manifest.json` itself.
+To force it immediately: open the manifest URL in a browser tab and hard-refresh
+it (Ctrl+Shift+R), then reload Owlbear.
 
 ## How it fits together
 

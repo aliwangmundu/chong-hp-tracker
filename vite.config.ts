@@ -1,6 +1,7 @@
 import path from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import pkg from "./package.json";
 import site from "./site.config.json";
 
 export default defineConfig(({ command }) => ({
@@ -8,6 +9,9 @@ export default defineConfig(({ command }) => ({
   // but served from the root during development so the local manifest stays at
   // http://localhost:5173/manifest.json. Edit site.config.json to change it.
   base: command === "build" ? site.basePath : "/",
+
+  // Stamped into the panel so you can see which build is actually running.
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
 
   plugins: [react()],
   resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
