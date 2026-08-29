@@ -1,5 +1,4 @@
 import { type ReactNode, useState } from "react";
-import type { CategoryDef } from "@/core/categories";
 import { clampExtraHp, clampMaxHp } from "@/core/inlineMath";
 import { NOTE_MAX_LENGTH, RECORD_NAME_MAX_LENGTH } from "@/core/records";
 import type {
@@ -14,8 +13,6 @@ import StatField from "./StatField";
 
 type Props = {
   record: TrackedRecord;
-  /** Categories this person can see, so a player cannot file into a hidden one. */
-  categories: CategoryDef[];
   token: AssignableToken | undefined;
   /** The token currently selected on the map, if exactly one is. */
   selectedToken: AssignableToken | undefined;
@@ -24,7 +21,6 @@ type Props = {
   onNameChange: (id: string, value: string) => void;
   onNoteChange: (id: string, value: string) => void;
   onConditionsChange: (id: string, next: Condition[]) => void;
-  onCategoryChange: (id: string, categoryId: string | null) => void;
   onAssign: (id: string, tokenId: string | null) => void;
   onDelete: (id: string) => void;
 };
@@ -38,11 +34,12 @@ type Props = {
  * push the rest of the roster off the screen.
  *
  * This is also the only place any of these values can be changed — the row is
- * deliberately read-only apart from HP.
+ * deliberately read-only apart from HP. Filing a record under a category is the
+ * exception: that is done by dragging it into the section, which is both faster
+ * and the only way to see where it lands.
  */
 export default function RecordDetails({
   record,
-  categories,
   token,
   selectedToken,
   onStatChange,
@@ -50,7 +47,6 @@ export default function RecordDetails({
   onNameChange,
   onNoteChange,
   onConditionsChange,
-  onCategoryChange,
   onAssign,
   onDelete,
 }: Props) {
@@ -64,6 +60,11 @@ export default function RecordDetails({
             onCommit={(next) => onNoteChange(record.id, next)}
           />
         </div>
+
+        <ConditionList
+          conditions={record.conditions}
+          onChange={(next) => onConditionsChange(record.id, next)}
+        />
 
         <div className="space-y-1">
           <Label>Name</Label>
@@ -119,35 +120,6 @@ export default function RecordDetails({
           </div>
         </div>
 
-        <div className="space-y-1">
-          <Label>Group</Label>
-          <select
-            value={record.categoryId ?? ""}
-            onChange={(event) =>
-              onCategoryChange(
-                record.id,
-                event.currentTarget.value === ""
-                  ? null
-                  : event.currentTarget.value,
-              )
-            }
-            className={[
-              "w-full rounded-md border px-1.5 py-1 text-xs outline-none transition-colors",
-              "border-ink-200 bg-white text-ink-900 hover:border-ink-300",
-              "dark:border-ink-800 dark:bg-ink-950 dark:text-ink-100 dark:hover:border-ink-700",
-              "focus:border-ink-400 focus:ring-2 focus:ring-ink-400/30",
-            ].join(" ")}
-          >
-            <option value="">Ungrouped</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name || "Untitled"}
-                {category.hidden ? " (hidden)" : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-
         {/* AC, extra and max share one line — three secondary numbers do not
             deserve a stacked row each above the conditions. */}
         <div className="flex items-center gap-2 pt-0.5">
@@ -182,11 +154,6 @@ export default function RecordDetails({
             />
           </InlineStat>
         </div>
-
-        <ConditionList
-          conditions={record.conditions}
-          onChange={(next) => onConditionsChange(record.id, next)}
-        />
 
         <div className="border-t border-ink-200 pt-2 dark:border-ink-800">
           <SmallButton

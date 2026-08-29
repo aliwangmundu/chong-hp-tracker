@@ -28,6 +28,7 @@ import {
   withCategory,
   withoutCategory,
 } from "@/core/categories";
+import type { RecordSpec } from "@/core/command";
 import { stepDurations } from "@/core/entries";
 import {
   moveRecordInto,
@@ -53,6 +54,7 @@ import type {
   NumericStatKey,
   TrackedRecord,
 } from "@/core/types";
+import CommandBar from "./CommandBar";
 import CategorySection, {
   categoryFromDroppableId,
 } from "./CategorySection";
@@ -74,6 +76,7 @@ export default function App() {
   const [isGm, setIsGm] = useState(false);
   const [round, setRoundState] = useState(FIRST_ROUND);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [commandOpen, setCommandOpen] = useState(false);
 
   // Scene tokens — only for linking, thumbnails and names.
   useEffect(() => {
@@ -177,6 +180,52 @@ export default function App() {
     setExpandedId(record.id);
   }, [editRecords]);
 
+  /**
+   * Bulk entry from the command bar.
+   *
+   * Categories named in the input are matched case-insensitively and created if
+   * missing — hidden, like any new category, so a wave typed in mid-session
+   * does not appear on the players' panel the moment it exists. Records and
+   * categories go in one write so a new group can never arrive without the
+   * records that asked for it.
+   */
+  const addFromCommand = useCallback(
+    (specs: RecordSpec[]) => {
+      if (specs.length === 0) return;
+      edit((current) => {
+        const categories = [...current.categories];
+        const byName = new Map(
+          categories.map((category) => [category.name.toLowerCase(), category]),
+        );
+
+        const records = [...current.records];
+        for (const spec of specs) {
+          let categoryId: string | null = null;
+          if (spec.group !== null) {
+            const key = spec.group.toLowerCase();
+            let category = byName.get(key);
+            if (category === undefined) {
+              category = newCategory(spec.group);
+              categories.push(category);
+              byName.set(key, category);
+            }
+            categoryId = category.id;
+          }
+          records.push({
+            ...newRecord(spec.name),
+            hp: spec.hp,
+            maxHp: spec.maxHp,
+            ac: spec.ac,
+            categoryId,
+          });
+        }
+
+        return { records, categories };
+      });
+    },
+    [edit],
+  );
+
   const addCategory = useCallback(() => {
     editCategories((current) => [...current, newCategory()]);
   }, [editCategories]);
@@ -220,12 +269,6 @@ export default function App() {
   const handleConditionsChange = useCallback(
     (id: string, conditions: Condition[]) =>
       editRecords((current) => withRecord(current, id, { conditions })),
-    [editRecords],
-  );
-
-  const handleCategoryChange = useCallback(
-    (id: string, categoryId: string | null) =>
-      editRecords((current) => withRecord(current, id, { categoryId })),
     [editRecords],
   );
 
@@ -416,7 +459,6 @@ export default function App() {
             {expandedId === record.id && (
               <RecordDetails
                 record={record}
-                categories={visibleCategories}
                 token={token}
                 selectedToken={selectedToken}
                 onStatChange={handleStatChange}
@@ -424,7 +466,6 @@ export default function App() {
                 onNameChange={handleNameChange}
                 onNoteChange={handleNoteChange}
                 onConditionsChange={handleConditionsChange}
-                onCategoryChange={handleCategoryChange}
                 onAssign={handleAssign}
                 onDelete={handleDelete}
               />
@@ -447,7 +488,16 @@ export default function App() {
           canStepBack={round > FIRST_ROUND}
           onAddRecord={addRecord}
           onAddCategory={addCategory}
+          onToggleCommand={() => setCommandOpen((open) => !open)}
+          commandOpen={commandOpen}
         />
+
+        {commandOpen && (
+          <CommandBar
+            onSubmit={addFromCommand}
+            onClose={() => setCommandOpen(false)}
+          />
+        )}
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">
           {visibleCount === 0 && visibleCategories.length === 0 ? (

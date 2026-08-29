@@ -6,6 +6,8 @@ type Props = {
   canStepBack: boolean;
   onAddRecord: () => void;
   onAddCategory: () => void;
+  onToggleCommand: () => void;
+  commandOpen: boolean;
 };
 
 /**
@@ -21,6 +23,8 @@ export default function RoundBar({
   canStepBack,
   onAddRecord,
   onAddCategory,
+  onToggleCommand,
+  commandOpen,
 }: Props) {
   return (
     <div className="flex shrink-0 items-center gap-1 border-b border-ink-200 px-2 py-1.5 dark:border-ink-800">
@@ -42,6 +46,17 @@ export default function RoundBar({
 
       <div className="flex flex-1 items-center justify-end gap-0.5">
         <AddButton
+          label="Add several at once by typing them"
+          onClick={onToggleCommand}
+          active={commandOpen}
+          strokeWidth={2}
+        >
+          <path d="m5 8 3.5 3.5L5 15" />
+          <path d="M12 15h7" />
+          <rect x="2" y="4" width="20" height="16" rx="2.5" />
+        </AddButton>
+
+        <AddButton
           label="New category — hidden from players until you reveal it"
           onClick={onAddCategory}
           strokeWidth={2}
@@ -62,11 +77,13 @@ function AddButton({
   label,
   onClick,
   strokeWidth = 2.5,
+  active = false,
   children,
 }: {
   label: string;
   onClick: () => void;
   strokeWidth?: number;
+  active?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -74,11 +91,13 @@ function AddButton({
       type="button"
       onClick={onClick}
       aria-label={label}
+      aria-pressed={active}
       title={label}
       className={[
-        "flex size-6 items-center justify-center rounded-md",
-        "text-ink-500 transition-colors hover:bg-ink-200 hover:text-ink-900",
-        "dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-ink-50",
+        "flex size-6 items-center justify-center rounded-md transition-colors",
+        active
+          ? "bg-ink-300 text-ink-900 dark:bg-ink-700 dark:text-ink-50"
+          : "text-ink-500 hover:bg-ink-200 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-ink-50",
       ].join(" ")}
     >
       <svg

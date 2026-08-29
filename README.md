@@ -21,7 +21,23 @@ without it.
   Drag rows to reorder; the order sticks.
 - **Categories, made by anyone.** The folder button adds one. Rename it in
   place, drag records into it, and hide the whole thing with the eye. Records
-  not filed anywhere sit in an **Ungrouped** section at the top.
+  not filed anywhere sit in an **Ungrouped** section at the top. Dragging is the
+  only way to file a record — it is faster than a dropdown and you can see where
+  it lands.
+- **A command bar for bulk entry**, on the terminal button. One line per record,
+  name first, then any of these in any order:
+
+  | you type    | means                                    |
+  | ----------- | ---------------------------------------- |
+  | `x8`        | eight of them, numbered `Goblin 1`, `2`… |
+  | `7`         | 7 current HP                             |
+  | `7/12`      | 7 current, 12 max                        |
+  | `ac 15`     | armour class — `ac:15` and `ac=15` too   |
+  | `#wave1`    | file under that category, creating it    |
+
+  So `Goblin x8 7/7 ac 15 #wave1` is eight goblins in a new hidden category.
+  It parses as you type and tells you what it will add before you commit;
+  `Ctrl+Enter` adds, `Esc` closes. Lines starting `//` are ignored.
 - **AC is free text.** Three characters, so `18`, `M` and `?` are all fine.
 - **Inline math in the HP field.** Click into HP and keep typing:
 
@@ -38,16 +54,17 @@ without it.
   and leaves the value alone rather than committing a wrong number.
 
 - **The chevron on each row** expands it in place, full width and flush with
-  the row. Inside, top to bottom: a free-text **note**, the name, the token
-  link, the group, then AC, extra HP (temporary hit points, added into the
+  the row. Inside, top to bottom: a free-text **note**, the conditions, the
+  name, the token link, then AC, extra HP (temporary hit points, added into the
   number on the token) and max HP (caps the HP field, never drawn on the map)
-  on one line, then conditions. Extra and max are plain number fields —
-  arithmetic entry is for HP only, where "-25" is what you actually mean.
+  on one line. Extra and max are plain number fields — arithmetic entry is for
+  HP only, where "-25" is what you actually mean.
 - **A round counter** sits above the list: `‹ Round 3 ›`. Advancing it counts
   every condition on every record down by one; stepping back counts them up, so
   the two arrows undo each other.
-- **Conditions**, any number of them, at the bottom of the expanded row. Each
-  is a name and a countdown the round drives, with a small `×` to remove it.
+- **Conditions**, any number of them, near the top of the expanded row — the
+  thing most likely to change mid-fight sits where you can reach it. Each is a
+  name and a countdown the round drives, with a small `×` to remove it.
 - **Condition circles on the token.** Up to four along the top edge, each
   showing that condition's remaining duration, turning red at 0.
 - **The list follows you between scenes.** Records, categories and the round
@@ -140,7 +157,7 @@ index.html       landing page that prints the install URL
 ```
 
 ```
-src/core/    records, categories, inline math, AC, entries, settings, tokens
+src/core/    records, categories, command parser, inline math, AC, settings
 src/obr/     bounds maths, bubble builders, the sync loop
 src/ui/      the panel
 ```
@@ -159,6 +176,13 @@ src/ui/      the panel
 - **The expanded panel caps its own height and scrolls.** A record with a long
   note and six conditions would otherwise push the rest of the roster off the
   screen. The bar is hidden — it scrolls, it just does not advertise it.
+- **A bare number in the command bar is current HP, not max.** Setting max to
+  match would look helpful and then quietly stop a half-health character from
+  healing. `7/12` sets both, explicitly.
+- **The command bar previews before it commits.** A typo becomes visible while
+  you are still typing rather than becoming eight wrongly-named goblins you
+  then delete one at a time. Bad lines are reported and skipped; the good ones
+  still go in.
 - **Notes are capped at 400 characters.** The whole tracker shares Owlbear's
   16kB of room metadata, and free text is the one field that could eat it. Long
   enough for a reminder, short enough that fifty records still fit.
