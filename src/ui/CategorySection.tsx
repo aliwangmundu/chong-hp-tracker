@@ -81,26 +81,26 @@ export default function CategorySection({
           </svg>
         </button>
 
-        {editable ? (
-          <NameField value={name} onCommit={onRename} />
-        ) : (
-          <h2
-            className={[
-              "truncate text-[11px] font-semibold uppercase tracking-wider",
-              accent
-                ? "text-amber-700 dark:text-amber-400"
-                : "text-ink-500 dark:text-ink-400",
-            ].join(" ")}
-          >
-            {name || "Untitled"}
-          </h2>
-        )}
+        {/* The heading centres itself between the chevron and the controls;
+            the spacer opposite is what keeps it honestly centred. */}
+        <div className="flex min-w-0 flex-1 justify-center">
+          {editable ? (
+            <NameField value={name} onCommit={onRename} />
+          ) : (
+            <h2
+              className={[
+                "truncate text-[11px] font-semibold uppercase tracking-wider",
+                accent
+                  ? "text-amber-700 dark:text-amber-400"
+                  : "text-ink-500 dark:text-ink-400",
+              ].join(" ")}
+            >
+              {name || "Untitled"}
+            </h2>
+          )}
+        </div>
 
-        <span className="shrink-0 text-[11px] tabular-nums text-ink-400 dark:text-ink-600">
-          {count}
-        </span>
-
-        <div className="h-px flex-1 bg-ink-200 dark:bg-ink-800" />
+        {!editable && <div className="size-5 shrink-0" />}
 
         {editable && (
           <>
@@ -189,7 +189,7 @@ function NameField({
       value={draft ?? value}
       className={[
         "min-w-0 max-w-[9rem] flex-none truncate rounded border border-transparent bg-transparent",
-        "px-1 py-0.5 text-[11px] font-semibold uppercase tracking-wider outline-none transition-colors",
+        "px-1 py-0.5 text-center text-[11px] font-semibold uppercase tracking-wider outline-none transition-colors",
         "text-ink-500 dark:text-ink-400",
         "placeholder:text-ink-400 dark:placeholder:text-ink-600",
         "hover:border-ink-200 dark:hover:border-ink-800",

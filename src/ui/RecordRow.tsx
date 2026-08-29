@@ -7,6 +7,7 @@ import type {
   NumericStatKey,
   TrackedRecord,
 } from "@/core/types";
+import AdjustField from "./AdjustField";
 import StatField from "./StatField";
 
 type Props = {
@@ -15,11 +16,11 @@ type Props = {
   /** The token selected on the map, if exactly one is. Enables linking. */
   selectedToken: AssignableToken | undefined;
   selected: boolean;
-  chosen: boolean;
   expanded: boolean;
+  /** The player view gets a damage box; the DM view keeps the row narrow. */
+  showAdjust?: boolean;
   onStatChange: (id: string, key: NumericStatKey, value: number) => void;
   onToggleExpanded: (id: string) => void;
-  onToggleChosen: (id: string) => void;
   onAssign: (id: string, tokenId: string) => void;
 };
 
@@ -60,19 +61,18 @@ async function focusToken(id: string): Promise<void> {
  * lives in the expanded panel, so a mistimed click during combat can cost you a
  * hit point but never rename a character.
  *
- * The other two things a click does here are cheap and reversible: the slot
- * links a token, and the name puts the row in Chosen.
+ * The only other thing a click does here is link a token, from the slot on the
+ * left.
  */
 export default function RecordRow({
   record,
   token,
   selectedToken,
   selected,
-  chosen,
   expanded,
+  showAdjust = false,
   onStatChange,
   onToggleExpanded,
-  onToggleChosen,
   onAssign,
 }: Props) {
   const {
@@ -159,20 +159,15 @@ export default function RecordRow({
         )}
       </button>
 
-      <button
-        type="button"
-        onClick={() => onToggleChosen(record.id)}
-        onPointerDown={(event) => event.stopPropagation()}
-        aria-pressed={chosen}
-        title={chosen ? "Remove from Chosen" : "Move to Chosen"}
+      <span
         className={[
-          "min-w-0 flex-1 truncate rounded px-1 py-1 text-left text-sm",
-          "transition-colors hover:bg-ink-200/60 dark:hover:bg-ink-800/60",
+          "min-w-0 flex-1 truncate px-1 text-sm",
           record.name === "" ? "text-ink-400 dark:text-ink-600" : "",
         ].join(" ")}
+        title={record.name || token?.name || "Unnamed"}
       >
         {record.name || token?.name || "Unnamed"}
-      </button>
+      </span>
 
       <StatField
         label={`${record.name || "Record"} hit points`}
@@ -183,6 +178,19 @@ export default function RecordRow({
           onStatChange(record.id, "hp", clampHp(next, record.maxHp))
         }
       />
+
+      {showAdjust && (
+        <AdjustField
+          label={`Damage or heal ${record.name || "record"}`}
+          onAdjust={(delta) =>
+            onStatChange(
+              record.id,
+              "hp",
+              clampHp(record.hp + delta, record.maxHp),
+            )
+          }
+        />
+      )}
 
       <button
         type="button"

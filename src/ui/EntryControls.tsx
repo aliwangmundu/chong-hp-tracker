@@ -137,10 +137,9 @@ export function SectionHeading({
 }) {
   return (
     <div className="flex items-center gap-2 pb-1 pt-1">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
+      <h3 className="flex-1 text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
         {title}
       </h3>
-      <div className="h-px flex-1 bg-ink-200 dark:bg-ink-800" />
       <AddButton label={addLabel} onClick={onAdd} />
     </div>
   );

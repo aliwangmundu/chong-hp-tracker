@@ -138,7 +138,7 @@ export default function RecordDetails({
           </InlineStat>
         </div>
 
-        <div className="border-t border-ink-200 pt-2 dark:border-ink-800">
+        <div className="pt-1">
           <SmallButton
             danger
             title="Delete this record. The token itself is untouched."

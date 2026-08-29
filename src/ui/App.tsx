@@ -62,6 +62,7 @@ import CategorySection, {
 import RecordDetails from "./RecordDetails";
 import RecordRow from "./RecordRow";
 import RoundBar from "./RoundBar";
+import ViewTabs, { type View } from "./ViewTabs";
 
 /**
  * Popover width. Fixed now that details open inline rather than beside the
@@ -84,6 +85,12 @@ export default function App() {
   /** Per-person working set. Never written to the room. */
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const [view, setView] = useState<View>("PLAYER");
+  const viewChosen = useRef(false);
+  const chooseView = useCallback((next: View) => {
+    viewChosen.current = true;
+    setView(next);
+  }, []);
 
   // Scene tokens — only for linking, thumbnails and names.
   useEffect(() => {
@@ -131,7 +138,12 @@ export default function App() {
 
   useEffect(() => {
     void OBR.player.getSelection().then((ids) => setSelection(ids ?? []));
-    void OBR.player.getRole().then((role) => setIsGm(role === "GM"));
+    void OBR.player.getRole().then((role) => {
+      setIsGm(role === "GM");
+      // The role picks the opening tab and then stops mattering — switching is
+      // free, so this must not fight the person after they have chosen.
+      if (!viewChosen.current) setView(role === "GM" ? "DM" : "PLAYER");
+    });
     return OBR.player.onChange((player) => {
       setSelection(player.selection ?? []);
       setIsGm(player.role === "GM");
@@ -330,10 +342,8 @@ export default function App() {
 
   /**
    * Selecting a token on the map puts its record in Chosen; deselecting takes
-   * it out again.
-   *
-   * Only the ids the selection itself contributed are withdrawn, so a row you
-   * put there by clicking its name is not swept away when you click the map.
+   * it out again. That is the only way in or out — Chosen is a mirror of the
+   * map selection, not a second thing to keep in step by hand.
    */
   const fromTokens = useRef<ReadonlySet<string>>(new Set());
   useEffect(() => {
@@ -350,21 +360,8 @@ export default function App() {
     if (unchanged) return;
 
     fromTokens.current = derived;
-    setChosen((current) => {
-      const next = new Set(current);
-      for (const id of previous) if (!derived.has(id)) next.delete(id);
-      for (const id of derived) next.add(id);
-      return next;
-    });
+    setChosen(derived);
   }, [selection, state.records]);
-
-  const toggleChosen = useCallback((id: string) => {
-    setChosen((current) => {
-      const next = new Set(current);
-      if (!next.delete(id)) next.add(id);
-      return next;
-    });
-  }, []);
 
   const toggleCollapsed = useCallback((key: string) => {
     setCollapsed((current) => {
@@ -495,13 +492,30 @@ export default function App() {
     [editRecords, state.records],
   );
 
+  /**
+   * Everything this person may see, flat and in list order.
+   *
+   * The player view has no categories at all — the grouping is the GM's filing
+   * system, not something a player should have to navigate mid-fight — so the
+   * hidden ones are simply filtered out and the rest run together.
+   */
+  const flatRecords = useMemo(() => {
+    const known = new Set(state.categories.map((category) => category.id));
+    const allowed = new Set(visibleCategories.map((category) => category.id));
+    return state.records.filter((record) => {
+      const id = record.categoryId;
+      if (id === null || !known.has(id)) return true;
+      return allowed.has(id);
+    });
+  }, [state.categories, state.records, visibleCategories]);
+
   /** Linking needs exactly one token selected; two is ambiguous. */
   const selectedToken = useMemo(() => {
     if (selection.length !== 1) return undefined;
     return tokens.get(selection[0] ?? "");
   }, [selection, tokens]);
 
-  const renderRows = (records: TrackedRecord[]) => (
+  const renderRows = (records: TrackedRecord[], adjustable = false) => (
     <SortableContext
       items={records.map((record) => record.id)}
       strategy={verticalListSortingStrategy}
@@ -518,11 +532,10 @@ export default function App() {
               selected={
                 record.tokenId !== null && selection.includes(record.tokenId)
               }
-              chosen={chosen.has(record.id)}
               expanded={expandedId === record.id}
+              showAdjust={adjustable}
               onStatChange={handleStatChange}
               onToggleExpanded={toggleExpanded}
-              onToggleChosen={toggleChosen}
               onAssign={handleAssign}
             />
             {expandedId === record.id && (
@@ -550,6 +563,8 @@ export default function App() {
         className="flex h-full shrink-0 flex-col"
         style={{ width: PANEL_WIDTH }}
       >
+        <ViewTabs view={view} onChange={chooseView} />
+
         <RoundBar
           round={state.round}
           onStep={stepRound}
@@ -568,7 +583,16 @@ export default function App() {
         )}
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">
-          {visibleCount === 0 && visibleCategories.length === 0 ? (
+          {view === "PLAYER" ? (
+            flatRecords.length === 0 ? (
+              <Placeholder>Nothing to track yet.</Placeholder>
+            ) : (
+              // No DndContext: with the sections gone there is nothing to drag
+              // between, and reordering a filtered list would shuffle records
+              // the player cannot see.
+              renderRows(flatRecords, true)
+            )
+          ) : visibleCount === 0 && visibleCategories.length === 0 ? (
             <Placeholder>
               Add a record with <strong>+</strong>, then link a token to it.
             </Placeholder>
@@ -580,7 +604,7 @@ export default function App() {
               onDragEnd={handleDragEnd}
             >
               {/* Always present — it is the working set, and an empty one
-                  still has to be a drop target. */}
+                  still has to say what puts something in it. */}
               <CategorySection
                 categoryId={CHOSEN_ID}
                 name="Chosen"
@@ -590,7 +614,7 @@ export default function App() {
                 accent
                 collapsed={collapsed.has(CHOSEN_ID)}
                 onToggleCollapsed={() => toggleCollapsed(CHOSEN_ID)}
-                emptyHint="Click a name, or select a token on the map."
+                emptyHint="Select a token on the map."
                 onRename={() => {}}
                 onToggleHidden={() => {}}
                 onDelete={() => {}}

@@ -20,10 +20,15 @@ without it.
   the only place it can be changed. A mistimed click during combat can cost you
   a hit point; it can never rename a character or unlink its token.
   Drag rows to reorder; the order sticks.
-- **Chosen**, pinned at the top and not removable. Click a record's name to move
-  it there, click again to send it back. Selecting a token on the map puts its
-  record there too, and deselecting takes it out. It is the same record either
-  way — editing it in Chosen edits the real thing, not a copy.
+- **Two tabs, Player and DM.** The DM view is the workshop — categories, Chosen,
+  drag-to-file. The player view is a flat roster with a damage box and nothing
+  else. Both are open to everyone; your role only picks which one opens first.
+- **A damage box beside HP in the player view.** Type `+8` or `-5` and press
+  Enter. The sign is required — `12` is refused rather than guessed at.
+- **Chosen**, in the DM view, pinned at the top and not removable. It mirrors
+  your map selection: select a token and its record appears there, deselect and
+  it goes back. It is the same record either way — editing it in Chosen edits
+  the real thing, not a copy.
 - **Categories, made by anyone.** The folder button adds one. Rename it in
   place, drag records into it, and hide the whole thing with the eye. Records
   not filed anywhere sit in an **Ungrouped** section. Every section collapses
@@ -183,9 +188,13 @@ src/ui/      the panel
 - **Chosen is per-person and never stored.** It mirrors your map selection, and
   a selection is already yours alone; writing it to the room would mean two
   players fighting over one highlight.
-- **Only the ids the map selection contributed are withdrawn from Chosen.** A
-  row you put there by clicking its name survives clicking around the map,
-  which a naive "replace the set from the selection" would not.
+- **The damage box demands a sign.** `12` could reasonably mean twelve damage
+  or twelve healing, and picking one silently is how a boss loses its health to
+  a hasty keystroke. It also keeps the box unambiguously different from the HP
+  field beside it, which takes an absolute value.
+- **The player view has no drag.** With the sections gone there is nothing to
+  drag between, and reordering a filtered list would shuffle records the player
+  cannot see.
 - **Only HP is editable in the row.** Every other value is edit-on-expand. The
   list is what you touch mid-combat, and the cost of a slip there should be a
   number you can retype, not an identity you have to reconstruct.
