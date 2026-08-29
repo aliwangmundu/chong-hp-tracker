@@ -42,17 +42,6 @@ columns, and a health field you can do arithmetic in.
   card. A condition is a name and a countdown the round drives. A resource is a
   name and a counter only you move — mana, ki, charges, arrows — with `‹ ›`
   either side of it. Both have a small `×` to remove them.
-- **Saved rolls.** Each token keeps a list: a label and an expression, with a
-  Roll button. Add as many as you like. Full expressions work — `1d20 + 3`,
-  `2d6 + 1d4 + 3`, `(1d8 + 2) * 2`, `d20 - 1`.
-- **A dice card floats over the map** — top right by default, one feed with the
-  last 20 rolls oldest-first and the newest given room at the bottom, shown as
-  `1d20 (17) + 3 = 20` with any die on its highest face bolded green (a crit)
-  and any 1 bolded red (a fumble). It appears on every roll for everyone in the
-  room, whether or not they have the tracker open, and hides itself after five
-  seconds. **Pin** keeps it up while you read; **move** cycles it round the four
-  corners and remembers where you put it. The dice button beside the round
-  counter brings it back.
 - **Condition circles on the token.** Up to four along the top edge, each
   showing that condition's remaining duration, turning red at 0.
 - **Nothing carries between scenes.** Stats live on the token, in the scene
@@ -123,7 +112,7 @@ index.html       landing page that prints the install URL
 ```
 
 ```
-src/core/    metadata, inline math, dice, sorting, AC, entries, settings, rolls
+src/core/    metadata, inline math, sorting, AC, entries, settings  (no SDK)
 src/obr/     bounds maths, bubble builders, the sync loop
 src/ui/      the panel
 ```
@@ -149,34 +138,6 @@ src/ui/      the panel
 - **Bubbles key off metadata presence, not value.** A monster knocked to 0 HP
   still shows a `0` bubble; a token nobody has touched shows none. Checking for
   a non-zero value would make dead monsters look untracked.
-- **The floating result is a popover, not part of the panel.** An extension
-  gets no drawing surface over the map, but `OBR.popover.open` with
-  `anchorReference: "POSITION"` takes screen coordinates, and `hidePaper: true`
-  drops Owlbear's frame — which together make a free-floating card. It is
-  opened from the background script, so it shows for everyone in the room
-  regardless of whether their panel is open.
-- **The popover reads the log rather than being passed a roll.** It needs no
-  message channel for content: whoever rolled, every client renders the same
-  feed.
-- **One owner for the card.** Only the background script opens, closes and
-  times it; the panel and the card itself send requests down a local broadcast
-  channel. Two components with their own auto-hide timers would race, and a
-  pinned card would get closed by the timer nobody was tracking.
-- **Moving means closing and reopening.** The popover API has `setWidth` and
-  `setHeight` but no `setPosition`, so free dragging would flicker on every
-  frame. Cycling the four corners costs one reposition per click instead, and
-  the choice is kept in `localStorage` — same origin for the background script
-  and the card, which is what lets the card move itself.
-- **The roll log is the broadcast channel.** Every client already listens for
-  scene metadata changes, so appending an entry both stores it and delivers it
-  to everyone — no separate message channel, and the banner each player sees is
-  driven by the log rather than their own roll.
-- **The log stores segments, not a finished string.** The bold on a crit has to
-  survive the trip through scene metadata to everyone else, which a rendered
-  line of text could not carry.
-- **Dice use `crypto.getRandomValues`, with rejection sampling.** `% sides` on
-  a raw 32-bit value skews the low faces; the loop discards the short tail
-  instead so every face is equally likely.
 - **Expired conditions are kept, not deleted.** A duration of 0 turns red and
   stays put. The counter's job is counting; deciding an effect has actually
   ended is the GM's call — and keeping the row is what lets stepping the round
@@ -198,10 +159,8 @@ src/ui/      the panel
 - AC allows three characters — `AC_MAX_LENGTH` in `src/core/ac.ts`.
 - Condition and resource names cap at 24 characters —
   `ENTRY_NAME_MAX_LENGTH` in `src/core/metadata.ts`.
-- The log keeps 20 rolls — `ROLL_LOG_LIMIT` in `src/core/rolls.ts`.
 - Four condition circles per token — `MAX_CONDITION_BUBBLES` in
   `src/obr/attachments.ts`.
-- A roll is capped at 100 dice, d1000 — the limits in `src/core/dice.ts`.
 - HP floors at 0 and is capped by max HP once one is set; a max of 0 means no
   cap — `clampHp` in `src/core/inlineMath.ts`.
 

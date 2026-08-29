@@ -25,9 +25,7 @@ import {
   writeStats,
   writeStatsBatch,
 } from "@/core/metadata";
-import { rollExpression } from "@/core/dice";
-import { newEntryId, stepDurations } from "@/core/entries";
-import { ROLL_CONTROL_CHANNEL, appendRoll } from "@/core/rolls";
+import { stepDurations } from "@/core/entries";
 import {
   FIRST_ROUND,
   parseSettings,
@@ -40,7 +38,6 @@ import {
   type Condition,
   type NumericStatKey,
   type Resource,
-  type RollEntry,
   type TokenStats,
   type TrackedToken,
 } from "@/core/types";
@@ -59,15 +56,6 @@ import TokenDrawer, { DETAIL_WIDTH } from "./TokenDrawer";
  */
 const PANEL_WIDTH = 288;
 
-/** The background script owns the dice card; the panel only asks for it. */
-function showRollPanel(): void {
-  void OBR.broadcast.sendMessage(
-    ROLL_CONTROL_CHANNEL,
-    { kind: "show" },
-    { destination: "LOCAL" },
-  );
-}
-
 export default function App() {
   const [tokens, setTokens] = useState<TrackedToken[]>([]);
   const [selection, setSelection] = useState<string[]>([]);
@@ -75,8 +63,6 @@ export default function App() {
   const [isGm, setIsGm] = useState(false);
   const [adversariesHidden, setAdversariesHidden] = useState(false);
   const [round, setRoundState] = useState(FIRST_ROUND);
-  const [rollError, setRollError] = useState<string | null>(null);
-  const [playerName, setPlayerName] = useState("");
   const [detailsFor, setDetailsFor] = useState<string | null>(null);
   /** Set while a drag is being written, so the scene echo cannot flicker. */
   const [pendingGroups, setPendingGroups] = useState<GroupedTokens | null>(null);
@@ -111,11 +97,9 @@ export default function App() {
   useEffect(() => {
     void OBR.player.getSelection().then((ids) => setSelection(ids ?? []));
     void OBR.player.getRole().then((role) => setIsGm(role === "GM"));
-    void OBR.player.getName().then(setPlayerName);
     return OBR.player.onChange((player) => {
       setSelection(player.selection ?? []);
       setIsGm(player.role === "GM");
-      setPlayerName(player.name);
     });
   }, []);
 
@@ -249,42 +233,6 @@ export default function App() {
     [round, tokens],
   );
 
-  const handleRollsChange = useCallback(
-    (id: string, rolls: RollEntry[]) => {
-      setRollError(null);
-      patchToken(id, { rolls });
-    },
-    [patchToken],
-  );
-
-  const handleRoll = useCallback(
-    (id: string, entry: RollEntry) => {
-      const token = tokens.find((candidate) => candidate.id === id);
-      const result = rollExpression(entry.expression);
-
-      if (!result.ok) {
-        setRollError(result.error);
-        return;
-      }
-      setRollError(null);
-
-      // Ask our own background script to show the card now, rather than
-      // waiting for the scene write to echo back to us.
-      void showRollPanel();
-      void appendRoll({
-        id: newEntryId(),
-        who: playerName,
-        token: token?.name ?? "",
-        label: entry.label,
-        segments: result.segments,
-        total: result.total,
-        crit: result.crit,
-        fumble: result.fumble,
-      });
-    },
-    [playerName, tokens],
-  );
-
   const handleAcChange = useCallback((id: string, value: string) => {
     setTokens((current) =>
       current.map((token) =>
@@ -407,7 +355,6 @@ export default function App() {
           round={round}
           onStep={stepRound}
           canStepBack={round > FIRST_ROUND}
-          onShowRolls={showRollPanel}
         />
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">
@@ -455,9 +402,6 @@ export default function App() {
           onStatChange={handleStatChange}
           onConditionsChange={handleConditionsChange}
           onResourcesChange={handleResourcesChange}
-          onRollsChange={handleRollsChange}
-          onRoll={handleRoll}
-          rollError={rollError}
         />
       )}
     </div>

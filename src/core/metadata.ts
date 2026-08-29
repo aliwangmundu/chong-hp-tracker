@@ -6,7 +6,6 @@ import {
   type Condition,
   type NumericStatKey,
   type Resource,
-  type RollEntry,
   type TokenStats,
   type TrackedStats,
   type TrackedToken,
@@ -30,16 +29,12 @@ const DEFAULT_STATS: TokenStats = {
   ac: "",
   conditions: [],
   resources: [],
-  rolls: [],
   category: DEFAULT_CATEGORY,
   index: UNPLACED_INDEX,
 };
 
 /** Names are free text; a cap keeps one pasted essay from wrecking the card. */
 export const ENTRY_NAME_MAX_LENGTH = 24;
-
-/** Dice expressions and roll notes. Long enough for anything sensible. */
-export const ROLL_TEXT_MAX_LENGTH = 64;
 
 
 /** Tokens this extension tracks: images the players actually push around. */
@@ -118,30 +113,6 @@ function readResources(source: Record<string, unknown>): Resource[] {
   }));
 }
 
-function readRolls(source: Record<string, unknown>): RollEntry[] {
-  const raw = source["rolls"];
-  if (!Array.isArray(raw)) return [];
-
-  const rolls: RollEntry[] = [];
-  for (const value of raw) {
-    if (typeof value !== "object" || value === null) continue;
-    const entry = value as Record<string, unknown>;
-    if (typeof entry["id"] !== "string") continue;
-    rolls.push({
-      id: entry["id"],
-      label:
-        typeof entry["label"] === "string"
-          ? entry["label"].slice(0, ENTRY_NAME_MAX_LENGTH)
-          : "",
-      expression:
-        typeof entry["expression"] === "string"
-          ? entry["expression"].slice(0, ROLL_TEXT_MAX_LENGTH)
-          : "",
-    });
-  }
-  return rolls;
-}
-
 function readCategory(source: Record<string, unknown>): Category {
   return source["category"] === "PLAYER" ? "PLAYER" : DEFAULT_CATEGORY;
 }
@@ -167,7 +138,6 @@ export function parseStats(item: Item): TokenStats {
     ac: readText(source, "ac"),
     conditions: readConditions(source),
     resources: readResources(source),
-    rolls: readRolls(source),
     category: readCategory(source),
     index,
   };

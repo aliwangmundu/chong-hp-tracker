@@ -1,4 +1,4 @@
-import type { Condition, Resource, RollEntry } from "./types";
+import type { Condition, Resource } from "./types";
 
 /** Anything the drawer keeps a list of. */
 type Entry = { id: string };
@@ -14,10 +14,6 @@ export function newCondition(): Condition {
 
 export function newResource(): Resource {
   return { id: newEntryId(), name: "", value: 0 };
-}
-
-export function newRoll(): RollEntry {
-  return { id: newEntryId(), label: "", expression: "" };
 }
 
 /** Returns a copy of the list with one entry's fields merged. */

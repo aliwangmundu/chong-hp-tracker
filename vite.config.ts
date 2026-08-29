@@ -32,7 +32,6 @@ export default defineConfig(({ command }) => ({
         main: path.resolve(__dirname, "index.html"),
         action: path.resolve(__dirname, "action.html"),
         background: path.resolve(__dirname, "background.html"),
-        roll: path.resolve(__dirname, "roll.html"),
       },
     },
   },
