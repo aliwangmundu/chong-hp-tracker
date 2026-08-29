@@ -7,79 +7,70 @@ import {
 } from "react";
 import OBR, { type Item, type Metadata } from "@owlbear-rodeo/sdk";
 import {
-  type CollisionDetection,
   DndContext,
   type DragEndEvent,
   PointerSensor,
   closestCenter,
-  pointerWithin,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
 import { restrictToFirstScrollableAncestor } from "@dnd-kit/modifiers";
 import {
-  isTrackableItem,
-  parseTokens,
-  statPatch,
-  withStat,
-  writeStats,
-  writeStatsBatch,
-} from "@/core/metadata";
+  SortableContext,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { stepDurations } from "@/core/entries";
 import {
-  FIRST_ROUND,
-  parseSettings,
-  setHideAdversaries,
-  setRound,
-} from "@/core/settings";
-import { type GroupedTokens, groupByCategory, moveToken } from "@/core/sorting";
-import {
-  CATEGORIES,
-  type Condition,
-  type NumericStatKey,
-  type Resource,
-  type TokenStats,
-  type TrackedToken,
+  moveRecord,
+  newRecord,
+  parseRecords,
+  releaseToken,
+  statPatch,
+  withRecord,
+  withoutRecord,
+} from "@/core/records";
+import { updateRecords } from "@/core/recordStore";
+import { FIRST_ROUND, parseSettings, setRound } from "@/core/settings";
+import { indexTokens, isAssignableItem } from "@/core/tokens";
+import type {
+  AssignableToken,
+  Condition,
+  NumericStatKey,
+  Resource,
+  TrackedRecord,
 } from "@/core/types";
-import CategorySection, { categoryFromDroppableId } from "./CategorySection";
-import HideToggle from "./HideToggle";
+import RecordDrawer, { DETAIL_WIDTH } from "./RecordDrawer";
+import RecordRow from "./RecordRow";
 import RoundBar from "./RoundBar";
-import TokenDrawer, { DETAIL_WIDTH } from "./TokenDrawer";
 
 /**
- * Popover width with only the token list showing.
+ * Popover width with only the record list showing.
  *
  * This is the authority — the effect below sets it on every close, so the
  * matching `action.width` in manifest.json only governs the very first frame.
- * Keep the two the same anyway, or the panel visibly jumps the first time a
- * card is closed.
  */
 const PANEL_WIDTH = 288;
 
 export default function App() {
-  const [tokens, setTokens] = useState<TrackedToken[]>([]);
+  const [records, setRecords] = useState<TrackedRecord[]>([]);
+  const [tokens, setTokens] = useState(new Map<string, AssignableToken>());
   const [selection, setSelection] = useState<string[]>([]);
   const [sceneReady, setSceneReady] = useState(false);
   const [isGm, setIsGm] = useState(false);
-  const [adversariesHidden, setAdversariesHidden] = useState(false);
   const [round, setRoundState] = useState(FIRST_ROUND);
   const [detailsFor, setDetailsFor] = useState<string | null>(null);
-  /** Set while a drag is being written, so the scene echo cannot flicker. */
-  const [pendingGroups, setPendingGroups] = useState<GroupedTokens | null>(null);
 
-  // Scene tokens
+  // Scene tokens — only for linking, thumbnails and names.
   useEffect(() => {
-    const update = (items: Item[]) => {
-      setTokens(parseTokens(items));
-      setPendingGroups(null);
-    };
+    const update = (items: Item[]) => setTokens(indexTokens(items));
 
     const handleReady = (ready: boolean) => {
       setSceneReady(ready);
       if (ready) {
-        void OBR.scene.items.getItems(isTrackableItem).then(update);
+        void OBR.scene.items.getItems(isAssignableItem).then(update);
       } else {
-        setTokens([]);
+        setTokens(new Map());
+        setRecords([]);
       }
     };
 
@@ -93,7 +84,17 @@ export default function App() {
     };
   }, []);
 
-  // Selection highlight and role
+  // Records and settings both live in scene metadata.
+  useEffect(() => {
+    if (!sceneReady) return;
+    const apply = (metadata: Metadata) => {
+      setRecords(parseRecords(metadata));
+      setRoundState(parseSettings(metadata).round);
+    };
+    void OBR.scene.getMetadata().then(apply);
+    return OBR.scene.onMetadataChange(apply);
+  }, [sceneReady]);
+
   useEffect(() => {
     void OBR.player.getSelection().then((ids) => setSelection(ids ?? []));
     void OBR.player.getRole().then((role) => setIsGm(role === "GM"));
@@ -103,19 +104,6 @@ export default function App() {
     });
   }, []);
 
-  // Scene settings — shared by everyone in the room
-  useEffect(() => {
-    if (!sceneReady) return;
-    const apply = (metadata: Metadata) => {
-      const settings = parseSettings(metadata);
-      setAdversariesHidden(settings.hideAdversaries);
-      setRoundState(settings.round);
-    };
-    void OBR.scene.getMetadata().then(apply);
-    return OBR.scene.onMetadataChange(apply);
-  }, [sceneReady]);
-
-  // Follow the Owlbear theme
   useEffect(() => {
     const apply = (mode: "DARK" | "LIGHT") => {
       document.documentElement.classList.toggle("dark", mode === "DARK");
@@ -124,178 +112,141 @@ export default function App() {
     return OBR.theme.onChange((theme) => apply(theme.mode));
   }, []);
 
-  const groups = useMemo(
-    () => pendingGroups ?? groupByCategory(tokens),
-    [pendingGroups, tokens],
+  /** Hidden records stay on the GM's panel and vanish from everyone else's. */
+  const visible = useMemo(
+    () => (isGm ? records : records.filter((record) => !record.hidden)),
+    [isGm, records],
   );
 
   /**
-   * The GM always sees adversaries; the switch only takes them off everyone
-   * else's panel. Bubbles on the tokens are untouched either way.
+   * Optimistic write.
+   *
+   * The panel shows the change at once, then the scene write goes out built
+   * from the live metadata rather than this local copy — so two people editing
+   * different records do not overwrite each other.
    */
-  const visibleCategories = useMemo(
-    () =>
-      CATEGORIES.filter(
-        (category) =>
-          category !== "ADVERSARY" || isGm || !adversariesHidden,
-      ),
-    [adversariesHidden, isGm],
+  const edit = useCallback(
+    (mutate: (records: TrackedRecord[]) => TrackedRecord[]) => {
+      setRecords(mutate);
+      void updateRecords(mutate);
+    },
+    [],
   );
 
-  const visibleTokenCount = useMemo(
-    () =>
-      visibleCategories.reduce(
-        (total, category) => total + groups[category].length,
-        0,
-      ),
-    [groups, visibleCategories],
-  );
-
-  const toggleAdversariesHidden = useCallback(() => {
-    const next = !adversariesHidden;
-    setAdversariesHidden(next); // optimistic; the scene echo confirms it
-    void setHideAdversaries(next).catch(() => setAdversariesHidden(!next));
-  }, [adversariesHidden]);
+  const addRecord = useCallback(() => {
+    const record = newRecord();
+    edit((current) => [...current, record]);
+    setDetailsFor(record.id);
+  }, [edit]);
 
   const handleStatChange = useCallback(
-    (id: string, key: NumericStatKey, value: number) => {
-      // Optimistic: the field should settle instantly, not after a round trip.
-      setTokens((current) =>
-        current.map((token) =>
-          token.id === id
-            ? { ...token, stats: withStat(token.stats, key, value) }
-            : token,
-        ),
-      );
-      void writeStats(id, statPatch(key, value));
-    },
-    [],
+    (id: string, key: NumericStatKey, value: number) =>
+      edit((current) => withRecord(current, id, statPatch(key, value))),
+    [edit],
   );
 
-  /** Optimistic list edit plus the scene write, shared by both entry lists. */
-  const patchToken = useCallback(
-    (id: string, patch: Partial<TokenStats>) => {
-      setTokens((current) =>
-        current.map((token) =>
-          token.id === id
-            ? { ...token, stats: { ...token.stats, ...patch } }
-            : token,
-        ),
-      );
-      void writeStats(id, patch);
-    },
-    [],
+  const handleAcChange = useCallback(
+    (id: string, ac: string) =>
+      edit((current) => withRecord(current, id, { ac })),
+    [edit],
+  );
+
+  const handleNameChange = useCallback(
+    (id: string, name: string) =>
+      edit((current) => withRecord(current, id, { name })),
+    [edit],
   );
 
   const handleConditionsChange = useCallback(
-    (id: string, conditions: Condition[]) => patchToken(id, { conditions }),
-    [patchToken],
+    (id: string, conditions: Condition[]) =>
+      edit((current) => withRecord(current, id, { conditions })),
+    [edit],
   );
 
   const handleResourcesChange = useCallback(
-    (id: string, resources: Resource[]) => patchToken(id, { resources }),
-    [patchToken],
+    (id: string, resources: Resource[]) =>
+      edit((current) => withRecord(current, id, { resources })),
+    [edit],
+  );
+
+  const handleToggleHidden = useCallback(
+    (id: string) =>
+      edit((current) =>
+        current.map((record) =>
+          record.id === id ? { ...record, hidden: !record.hidden } : record,
+        ),
+      ),
+    [edit],
+  );
+
+  const handleDelete = useCallback(
+    (id: string) => {
+      setDetailsFor((open) => (open === id ? null : open));
+      edit((current) => withoutRecord(current, id));
+    },
+    [edit],
+  );
+
+  /** Linking is exclusive: a token belongs to one record at a time. */
+  const handleAssign = useCallback(
+    (id: string, tokenId: string | null) =>
+      edit((current) =>
+        withRecord(
+          tokenId === null ? current : releaseToken(current, tokenId),
+          id,
+          { tokenId },
+        ),
+      ),
+    [edit],
   );
 
   /**
    * Advancing the round counts every condition in the scene down by one.
    *
    * Stepping back counts them up again, so the two arrows undo each other and
-   * a mis-click costs nothing. Every affected token goes in one batch write:
-   * one undo step, one round trip.
+   * a mis-click costs nothing.
    */
   const stepRound = useCallback(
     (delta: 1 | -1) => {
       const next = Math.max(FIRST_ROUND, round + delta);
       if (next === round) return;
 
-      const patches = new Map<string, Partial<TokenStats>>();
-      for (const token of tokens) {
-        if (token.stats.conditions.length === 0) continue;
-        patches.set(token.id, {
-          conditions: stepDurations(token.stats.conditions, -delta),
-        });
-      }
-
-      setRoundState(next); // optimistic; the scene echo confirms it
-      setTokens((current) =>
-        current.map((token) => {
-          const patch = patches.get(token.id);
-          return patch === undefined
-            ? token
-            : { ...token, stats: { ...token.stats, ...patch } };
-        }),
+      setRoundState(next);
+      edit((current) =>
+        current.map((record) =>
+          record.conditions.length === 0
+            ? record
+            : { ...record, conditions: stepDurations(record.conditions, -delta) },
+        ),
       );
-
-      void writeStatsBatch(patches);
       void setRound(next).catch(() => setRoundState(round));
     },
-    [round, tokens],
+    [edit, round],
   );
 
-  const handleAcChange = useCallback((id: string, value: string) => {
-    setTokens((current) =>
-      current.map((token) =>
-        token.id === id
-          ? { ...token, stats: { ...token.stats, ac: value } }
-          : token,
-      ),
-    );
-    void writeStats(id, { ac: value });
-  }, []);
-
-  // A token deleted from the scene must not leave its drawer open over nothing.
-  const detailsToken = useMemo(
-    () => tokens.find((token) => token.id === detailsFor) ?? null,
-    [detailsFor, tokens],
+  const detailsRecord = useMemo(
+    () => records.find((record) => record.id === detailsFor) ?? null,
+    [detailsFor, records],
   );
+  const detailsOpen = detailsRecord !== null;
 
-  const detailsOpen = detailsToken !== null;
-
-  /**
-   * Grow the popover rather than covering the list.
-   *
-   * Owlbear sizes the popover from the manifest, but an extension can resize
-   * its own. Widening by exactly the card's width puts the second window
-   * beside the first, and pinning the list to PANEL_WIDTH below means it does
-   * not reflow by a single pixel when that happens.
-   */
   useEffect(() => {
     void OBR.action.setWidth(
       detailsOpen ? PANEL_WIDTH + DETAIL_WIDTH : PANEL_WIDTH,
     );
   }, [detailsOpen]);
 
-  /** The row's `+` is a toggle: same token closes, a different one switches. */
+  useEffect(() => {
+    if (detailsFor !== null && detailsRecord === null) setDetailsFor(null);
+  }, [detailsFor, detailsRecord]);
+
   const toggleDetails = useCallback((id: string) => {
     setDetailsFor((current) => (current === id ? null : id));
   }, []);
 
-  // The token was deleted from the scene while its card was open.
-  useEffect(() => {
-    if (detailsFor !== null && detailsToken === null) setDetailsFor(null);
-  }, [detailsFor, detailsToken]);
-
-  /**
-   * Rows beat sections.
-   *
-   * A category section is a large droppable, so plain closestCenter will often
-   * pick it over the row the pointer is actually on and every drop would land
-   * at the end of the list.
-   */
-  const collisionDetection = useCallback<CollisionDetection>((args) => {
-    const under = pointerWithin(args);
-    const rows = under.filter(
-      (collision) => !String(collision.id).startsWith("category:"),
-    );
-    if (rows.length > 0) return rows;
-    if (under.length > 0) return under;
-    return closestCenter(args);
-  }, []);
-
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      // Enough travel that clicking into a stat field never starts a drag.
+      // Enough travel that clicking into a field never starts a drag.
       activationConstraint: { distance: 8 },
     }),
   );
@@ -303,47 +254,22 @@ export default function App() {
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
-      if (over === null) return;
+      if (over === null || active.id === over.id) return;
 
-      const activeId = String(active.id);
-      const overId = String(over.id);
-      if (activeId === overId) return;
+      const from = records.findIndex((record) => record.id === active.id);
+      const to = records.findIndex((record) => record.id === over.id);
+      if (from === -1 || to === -1) return;
 
-      const asCategory = categoryFromDroppableId(overId);
-      let targetCategory = asCategory;
-      let targetIndex = 0;
-
-      if (asCategory !== undefined) {
-        // Dropped on the section itself: append.
-        targetIndex = groups[asCategory].length;
-      } else {
-        for (const category of CATEGORIES) {
-          const index = groups[category].findIndex(
-            (token) => token.id === overId,
-          );
-          if (index !== -1) {
-            targetCategory = category;
-            targetIndex = index;
-            break;
-          }
-        }
-      }
-
-      if (targetCategory === undefined) return;
-
-      const { groups: next, patches } = moveToken(
-        groups,
-        activeId,
-        targetCategory,
-        targetIndex,
-      );
-      if (patches.size === 0) return;
-
-      setPendingGroups(next);
-      void writeStatsBatch(patches).catch(() => setPendingGroups(null));
+      edit((current) => moveRecord(current, from, to));
     },
-    [groups],
+    [edit, records],
   );
+
+  /** Linking needs exactly one token selected; two is ambiguous. */
+  const selectedToken = useMemo(() => {
+    if (selection.length !== 1) return undefined;
+    return tokens.get(selection[0] ?? "");
+  }, [selection, tokens]);
 
   return (
     <div className="app-surface flex h-full overflow-hidden">
@@ -355,42 +281,48 @@ export default function App() {
           round={round}
           onStep={stepRound}
           canStepBack={round > FIRST_ROUND}
+          onAdd={addRecord}
         />
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">
           {!sceneReady ? (
             <Placeholder>Open a scene to start tracking.</Placeholder>
-          ) : visibleTokenCount === 0 ? (
+          ) : visible.length === 0 ? (
             <Placeholder>
-              Drop a token on the map and it will show up here.
+              Add a record with <strong>+</strong>, then link a token to it.
             </Placeholder>
           ) : (
             <DndContext
               sensors={sensors}
-              collisionDetection={collisionDetection}
+              collisionDetection={closestCenter}
               modifiers={[restrictToFirstScrollableAncestor]}
               onDragEnd={handleDragEnd}
             >
-              {visibleCategories.map((category) => (
-                <CategorySection
-                  key={category}
-                  category={category}
-                  tokens={groups[category]}
-                  selection={selection}
-                  onStatChange={handleStatChange}
-                  onAcChange={handleAcChange}
-                  onToggleDetails={toggleDetails}
-                  openDetailsId={detailsFor}
-                  headerAction={
-                    category === "ADVERSARY" && isGm ? (
-                      <HideToggle
-                        hidden={adversariesHidden}
-                        onToggle={toggleAdversariesHidden}
-                      />
-                    ) : undefined
-                  }
-                />
-              ))}
+              <SortableContext
+                items={visible.map((record) => record.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {visible.map((record) => (
+                  <RecordRow
+                    key={record.id}
+                    record={record}
+                    token={
+                      record.tokenId === null
+                        ? undefined
+                        : tokens.get(record.tokenId)
+                    }
+                    selected={
+                      record.tokenId !== null &&
+                      selection.includes(record.tokenId)
+                    }
+                    detailsOpen={detailsFor === record.id}
+                    onStatChange={handleStatChange}
+                    onAcChange={handleAcChange}
+                    onNameChange={handleNameChange}
+                    onToggleDetails={toggleDetails}
+                  />
+                ))}
+              </SortableContext>
             </DndContext>
           )}
         </main>
@@ -402,12 +334,22 @@ export default function App() {
         </footer>
       </div>
 
-      {detailsToken !== null && (
-        <TokenDrawer
-          token={detailsToken}
+      {detailsRecord !== null && (
+        <RecordDrawer
+          record={detailsRecord}
+          token={
+            detailsRecord.tokenId === null
+              ? undefined
+              : tokens.get(detailsRecord.tokenId)
+          }
+          selectedToken={selectedToken}
+          isGm={isGm}
           onStatChange={handleStatChange}
           onConditionsChange={handleConditionsChange}
           onResourcesChange={handleResourcesChange}
+          onAssign={handleAssign}
+          onToggleHidden={handleToggleHidden}
+          onDelete={handleDelete}
         />
       )}
     </div>

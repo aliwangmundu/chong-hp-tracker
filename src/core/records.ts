@@ -1,0 +1,175 @@
+import { normalizeAc } from "./ac";
+import { ENTRY_NAME_MAX_LENGTH, newEntryId } from "./entries";
+import { getPluginId } from "./pluginId";
+import type {
+  Condition,
+  NumericStatKey,
+  Resource,
+  TrackedRecord,
+} from "./types";
+
+export const RECORDS_KEY = getPluginId("records");
+
+/** Record names are free text; a cap keeps one pasted essay out of the row. */
+export const RECORD_NAME_MAX_LENGTH = 32;
+
+export function newRecord(name = ""): TrackedRecord {
+  return {
+    id: newEntryId(),
+    name: name.slice(0, RECORD_NAME_MAX_LENGTH),
+    tokenId: null,
+    hp: 0,
+    extraHp: 0,
+    maxHp: 0,
+    ac: "",
+    conditions: [],
+    resources: [],
+    hidden: false,
+  };
+}
+
+function readInt(source: Record<string, unknown>, key: string): number {
+  const value = source[key];
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.trunc(value)
+    : 0;
+}
+
+function readText(source: Record<string, unknown>, key: string, cap: number) {
+  const value = source[key];
+  return typeof value === "string" ? value.slice(0, cap) : "";
+}
+
+/**
+ * Reads a list of named entries, dropping anything malformed.
+ *
+ * Another extension, a hand-edited scene, or an older version of this one can
+ * leave junk under our key; skipping the bad row keeps it from taking the whole
+ * record down with it.
+ */
+function readEntries<T extends { id: string; name: string }>(
+  raw: unknown,
+  build: (entry: Record<string, unknown>, id: string, name: string) => T,
+): T[] {
+  if (!Array.isArray(raw)) return [];
+
+  const entries: T[] = [];
+  for (const value of raw) {
+    if (typeof value !== "object" || value === null) continue;
+    const entry = value as Record<string, unknown>;
+    if (typeof entry["id"] !== "string") continue;
+    entries.push(
+      build(entry, entry["id"], readText(entry, "name", ENTRY_NAME_MAX_LENGTH)),
+    );
+  }
+  return entries;
+}
+
+export function parseRecords(
+  metadata: Record<string, unknown>,
+): TrackedRecord[] {
+  const raw = metadata[RECORDS_KEY];
+  if (!Array.isArray(raw)) return [];
+
+  const records: TrackedRecord[] = [];
+  for (const value of raw) {
+    if (typeof value !== "object" || value === null) continue;
+    const source = value as Record<string, unknown>;
+    if (typeof source["id"] !== "string") continue;
+
+    records.push({
+      id: source["id"],
+      name: readText(source, "name", RECORD_NAME_MAX_LENGTH),
+      tokenId:
+        typeof source["tokenId"] === "string" ? source["tokenId"] : null,
+      hp: readInt(source, "hp"),
+      extraHp: readInt(source, "extraHp"),
+      maxHp: readInt(source, "maxHp"),
+      ac: normalizeAc(
+        typeof source["ac"] === "string" ? source["ac"] : "",
+      ),
+      conditions: readEntries<Condition>(
+        source["conditions"],
+        (entry, id, name) => ({
+          id,
+          name,
+          duration: readInt(entry, "duration"),
+        }),
+      ),
+      resources: readEntries<Resource>(
+        source["resources"],
+        (entry, id, name) => ({ id, name, value: readInt(entry, "value") }),
+      ),
+      hidden: source["hidden"] === true,
+    });
+  }
+  return records;
+}
+
+/** Moves a record to a new position, returning a new array. */
+export function moveRecord(
+  records: TrackedRecord[],
+  from: number,
+  to: number,
+): TrackedRecord[] {
+  if (from === to) return records;
+  if (from < 0 || from >= records.length) return records;
+
+  const next = [...records];
+  const [moved] = next.splice(from, 1);
+  if (moved === undefined) return records;
+  next.splice(Math.max(0, Math.min(to, next.length)), 0, moved);
+  return next;
+}
+
+/**
+ * Type-safe single-stat patch.
+ *
+ * A computed key (`{ [key]: value }`) widens to an index signature and loses
+ * the link to TrackedRecord, so the switch keeps the compiler in the loop.
+ */
+export function statPatch(
+  key: NumericStatKey,
+  value: number,
+): Partial<TrackedRecord> {
+  switch (key) {
+    case "hp":
+      return { hp: value };
+    case "extraHp":
+      return { extraHp: value };
+    case "maxHp":
+      return { maxHp: value };
+  }
+}
+
+export function withRecord(
+  records: TrackedRecord[],
+  id: string,
+  patch: Partial<TrackedRecord>,
+): TrackedRecord[] {
+  return records.map((record) =>
+    record.id === id ? { ...record, ...patch } : record,
+  );
+}
+
+export function withoutRecord(
+  records: TrackedRecord[],
+  id: string,
+): TrackedRecord[] {
+  return records.filter((record) => record.id !== id);
+}
+
+/**
+ * Clears a token from every record that claims it.
+ *
+ * Two records pointing at one token would draw two sets of bubbles on top of
+ * each other, so linking is exclusive: the newest link wins.
+ */
+export function releaseToken(
+  records: TrackedRecord[],
+  tokenId: string,
+): TrackedRecord[] {
+  return records.map((record) =>
+    record.tokenId === tokenId ? { ...record, tokenId: null } : record,
+  );
+}

@@ -1,6 +1,8 @@
-import OBR, { type Image, type Item } from "@owlbear-rodeo/sdk";
+import OBR, { type Image, type Item, type Metadata } from "@owlbear-rodeo/sdk";
 import { getPluginId } from "@/core/pluginId";
-import { getTrackedStats, isTrackableItem, parseStats } from "@/core/metadata";
+import { parseRecords } from "@/core/records";
+import { isAssignableItem } from "@/core/tokens";
+import type { TrackedRecord } from "@/core/types";
 import {
   attachmentIds,
   attachmentSignature,
@@ -9,18 +11,25 @@ import {
 } from "./attachments";
 
 /**
- * Draws the HP and AC bubbles on tokens.
+ * Draws the HP, AC and condition bubbles on linked tokens.
+ *
+ * Two inputs now, not one: the records live in scene metadata and the tokens
+ * live in the scene, so a redraw is triggered by either changing. A record with
+ * no token, or one pointing at a token that has been deleted, simply draws
+ * nothing.
  *
  * Attachments are *local* items: every client renders its own from the shared
- * token metadata. That keeps them out of the saved scene, out of undo history,
- * and stops four extra items per token from being replicated to everyone.
+ * records. That keeps them out of the saved scene, out of undo history, and
+ * stops a pile of extra items per token from being replicated to everyone.
  */
 
-/** Signature of what we last drew, per token. Our whole diffing state. */
+/** Signature of what we last drew, per token id. Our whole diffing state. */
 const drawn = new Map<string, string>();
 
 let sceneDpi = 150;
 let running = false;
+let records: TrackedRecord[] = [];
+let tokens: Image[] = [];
 
 async function clearLocalAttachments(): Promise<void> {
   const stale = await OBR.scene.local.getItems(isOurAttachment);
@@ -30,29 +39,31 @@ async function clearLocalAttachments(): Promise<void> {
   drawn.clear();
 }
 
-async function sync(items: Item[]): Promise<void> {
-  const tokens = items.filter(isTrackableItem);
+async function sync(): Promise<void> {
+  const byId = new Map(tokens.map((token) => [token.id, token]));
 
   const toAdd: Item[] = [];
   const toDelete: string[] = [];
   const seen = new Set<string>();
 
-  for (const token of tokens) {
+  for (const record of records) {
+    if (record.tokenId === null) continue;
+    const token = byId.get(record.tokenId);
+    if (token === undefined) continue;
+
     seen.add(token.id);
 
-    const stats = parseStats(token);
-    const tracked = getTrackedStats(token);
-    const signature = attachmentSignature(token, stats, tracked, sceneDpi);
+    const signature = attachmentSignature(token, record, sceneDpi);
     if (drawn.get(token.id) === signature) continue;
 
     // Rebuild rather than patch: the set can change shape entirely (a bubble
     // appears or goes away), and ids are deterministic so this is exact.
     toDelete.push(...attachmentIds(token.id));
-    toAdd.push(...buildAttachments(token, stats, tracked, sceneDpi));
+    toAdd.push(...buildAttachments(token, record, sceneDpi));
     drawn.set(token.id, signature);
   }
 
-  // Tokens that left the scene take their attachments with them.
+  // Tokens that were unlinked, deleted, or whose record is gone.
   for (const id of [...drawn.keys()]) {
     if (seen.has(id)) continue;
     toDelete.push(...attachmentIds(id));
@@ -67,10 +78,8 @@ async function sync(items: Item[]): Promise<void> {
 }
 
 async function refresh(): Promise<void> {
-  const items = await OBR.scene.items.getItems<Image>(isTrackableItem);
-  drawn.clear();
   await clearLocalAttachments();
-  await sync(items);
+  await sync();
 }
 
 async function start(): Promise<void> {
@@ -78,10 +87,20 @@ async function start(): Promise<void> {
   running = true;
 
   sceneDpi = await OBR.scene.grid.getDpi();
+  [records, tokens] = await Promise.all([
+    OBR.scene.getMetadata().then(parseRecords),
+    OBR.scene.items.getItems<Image>(isAssignableItem),
+  ]);
   await refresh();
 
   OBR.scene.items.onChange((items) => {
-    void sync(items);
+    tokens = items.filter(isAssignableItem);
+    void sync();
+  });
+
+  OBR.scene.onMetadataChange((metadata: Metadata) => {
+    records = parseRecords(metadata);
+    void sync();
   });
 
   OBR.scene.grid.onChange((grid) => {
@@ -98,6 +117,8 @@ OBR.onReady(async () => {
     } else {
       running = false;
       drawn.clear();
+      records = [];
+      tokens = [];
     }
   });
 

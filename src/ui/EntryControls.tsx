@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ENTRY_NAME_MAX_LENGTH } from "@/core/metadata";
+import { ENTRY_NAME_MAX_LENGTH } from "@/core/entries";
 
 /** Shared bits of the condition and resource rows. */
 

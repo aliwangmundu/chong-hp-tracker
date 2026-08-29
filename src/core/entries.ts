@@ -3,6 +3,9 @@ import type { Condition, Resource } from "./types";
 /** Anything the drawer keeps a list of. */
 type Entry = { id: string };
 
+/** Condition and resource names. Long enough to read at a glance. */
+export const ENTRY_NAME_MAX_LENGTH = 24;
+
 export function newEntryId(): string {
   // Present in every browser Owlbear runs in, and in Node for the tests.
   return crypto.randomUUID();

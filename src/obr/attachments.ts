@@ -5,7 +5,7 @@ import {
   buildShape,
   buildText,
 } from "@owlbear-rodeo/sdk";
-import type { TokenStats, TrackedStats } from "@/core/types";
+import type { TrackedRecord } from "@/core/types";
 import { getTokenBounds } from "./bounds";
 
 // --- Look and feel ---------------------------------------------------------
@@ -141,17 +141,19 @@ function buildBubble(item: Image, bubble: Bubble): Item[] {
  * those positions whether one or both are shown, so a bubble never jumps
  * sideways when you set the other stat.
  *
- * An empty list is a valid answer: a token nobody has given stats to shows
- * nothing at all, which is what keeps scenery and unstatted tokens clean.
+ * Only ever called for a token a record is linked to, so HP always draws —
+ * linking is the deliberate act that says "put this one on the map". Scenery
+ * and unlinked tokens are never passed here at all.
  */
 export function buildAttachments(
   item: Image,
-  stats: TokenStats,
-  tracked: TrackedStats,
+  record: TrackedRecord,
   sceneDpi: number,
 ): Item[] {
-  const conditions = stats.conditions.slice(0, MAX_CONDITION_BUBBLES);
-  if (!tracked.hp && !tracked.ac && conditions.length === 0) return [];
+  const conditions = record.conditions.slice(0, MAX_CONDITION_BUBBLES);
+  // HP always shows: linking a token to a record is the deliberate act that
+  // says "draw this one". AC only shows when it has been filled in.
+  const showAc = record.ac !== "";
 
   const { center, width, height } = getTokenBounds(item, sceneDpi);
   const bottom = center.y + height / 2;
@@ -161,29 +163,23 @@ export function buildAttachments(
   // instead of letting them overlap.
   const halfSpan = Math.max(width / 2 - DIAMETER / 2 - EDGE_PADDING, DIAMETER / 2);
 
-  const items: Item[] = [];
+  const items: Item[] = buildBubble(item, {
+    id: `${item.id}${SUFFIXES.hpCircle}`,
+    textId: `${item.id}${SUFFIXES.hpText}`,
+    // Temporary hit points are folded into the number on the map; the panel is
+    // where the split between the two is visible.
+    value: String(record.hp + record.extraHp),
+    fill: HP_FILL,
+    stroke: HP_STROKE,
+    center: { x: center.x - halfSpan, y },
+  });
 
-  if (tracked.hp) {
-    items.push(
-      ...buildBubble(item, {
-        id: `${item.id}${SUFFIXES.hpCircle}`,
-        textId: `${item.id}${SUFFIXES.hpText}`,
-        // Temporary hit points are folded into the number on the map; the panel
-        // is where the split between the two is visible.
-        value: String(stats.hp + stats.extraHp),
-        fill: HP_FILL,
-        stroke: HP_STROKE,
-        center: { x: center.x - halfSpan, y },
-      }),
-    );
-  }
-
-  if (tracked.ac) {
+  if (showAc) {
     items.push(
       ...buildBubble(item, {
         id: `${item.id}${SUFFIXES.acCircle}`,
         textId: `${item.id}${SUFFIXES.acText}`,
-        value: stats.ac,
+        value: record.ac,
         fill: AC_FILL,
         stroke: AC_STROKE,
         center: { x: center.x + halfSpan, y },
@@ -228,20 +224,17 @@ export function buildAttachments(
  */
 export function attachmentSignature(
   item: Image,
-  stats: TokenStats,
-  tracked: TrackedStats,
+  record: TrackedRecord,
   sceneDpi: number,
 ): string {
   return [
-    stats.hp,
-    stats.extraHp,
-    stats.ac,
-    stats.conditions
+    record.hp,
+    record.extraHp,
+    record.ac,
+    record.conditions
       .slice(0, MAX_CONDITION_BUBBLES)
       .map((condition) => condition.duration)
       .join(","),
-    tracked.hp ? 1 : 0,
-    tracked.ac ? 1 : 0,
     item.position.x,
     item.position.y,
     item.scale.x,

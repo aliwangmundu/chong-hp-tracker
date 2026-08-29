@@ -2,16 +2,20 @@
 
 A deliberately small HP and AC tracker for [Owlbear Rodeo](https://owlbear.rodeo).
 
-Every token on the map shows up in the list on its own. Two categories, three
-columns, and a health field you can do arithmetic in.
+You add the records. Linking a token to one is optional, and everything works
+without it.
 
 ## What it does
 
-- **Automatic token list.** Any image token on the character or mount layer
-  appears. Nothing to add, nothing to select first.
-- **Two categories.** Allies and Adversaries. Drag rows between them; the
-  order sticks with the scene.
-- **Three columns.** Token, HP, AC. Everything else is behind the `+` button.
+- **You build the list.** `+` in the top bar adds a record: a name, HP, AC and
+  whatever else you fill in. Nothing appears on its own, and nothing vanishes
+  because a token moved layers or left the scene.
+- **Link a token when you want one.** Select a token on the map, open a
+  record's details, and press **Link selected**. That is what gives the bubbles
+  somewhere to draw. Unlink at any time — the record and its stats stay put.
+  A token belongs to one record at a time; linking it elsewhere moves it.
+- **Three columns.** Name, HP, AC. Everything else is behind the `+` button on
+  the row. Drag rows to reorder; the order sticks with the scene.
 - **AC is free text.** Three characters, so `18`, `M` and `?` are all fine.
 - **Inline math in the HP field.** Click into HP and keep typing:
 
@@ -35,25 +39,25 @@ columns, and a health field you can do arithmetic in.
   the token) and max HP (caps the HP field, never drawn on the map). Both are
   plain number fields — arithmetic entry is for HP only, where "-25" is what
   you actually mean.
-- **A round counter** sits above the token list: `‹ Round 3 ›`. Advancing it
-  counts every condition in the scene down by one; stepping back counts them
-  up, so the two arrows undo each other.
+- **A round counter** sits above the list: `‹ Round 3 ›`. Advancing it counts
+  every condition in the scene down by one; stepping back counts them up, so
+  the two arrows undo each other.
 - **Conditions and resources**, any number of each, below max HP on the second
   card. A condition is a name and a countdown the round drives. A resource is a
   name and a counter only you move — mana, ki, charges, arrows — with `‹ ›`
   either side of it. Both have a small `×` to remove them.
 - **Condition circles on the token.** Up to four along the top edge, each
   showing that condition's remaining duration, turning red at 0.
-- **Nothing carries between scenes.** Stats live on the token, in the scene
-  that token belongs to.
-- **Hide adversaries.** A GM-only switch on the Adversaries heading takes that
-  list off every player's panel. Bubbles on the tokens are unaffected, so the
-  monsters still show their HP and AC on the map — the roster is what gets
-  hidden, not the numbers. The setting lives on the scene, so it holds for
-  players who join later.
-- **Bubbles on the token.** HP bottom-left in red, AC bottom-right in slate.
-  A bubble appears once you have set that stat and holds its position whether
-  one or both are shown. A token you have never given stats to shows nothing.
+- **Nothing carries between scenes.** Records live in the scene's metadata, so
+  each scene has its own list.
+- **Hide a record from players.** A GM-only button in the details takes that one
+  line off everyone else's panel. Bubbles on its token are unaffected, so a
+  monster still shows HP and AC on the map — the roster line is what hides, not
+  the numbers.
+- **Bubbles on the linked token.** HP bottom-left in red, AC bottom-right in
+  slate. HP always draws, because linking a token is the deliberate act that
+  says "put this one on the map"; AC appears once you fill it in. An unlinked
+  record draws nothing anywhere.
 
 Everyone in the room sees the panel and can edit it.
 
@@ -132,7 +136,7 @@ index.html       landing page that prints the install URL
 ```
 
 ```
-src/core/    metadata, inline math, sorting, AC, entries, settings  (no SDK)
+src/core/    records, inline math, AC, entries, settings, token lookup
 src/obr/     bounds maths, bubble builders, the sync loop
 src/ui/      the panel
 ```
@@ -148,11 +152,22 @@ src/ui/      the panel
   as jitter rather than motion. The card appears in one frame instead, and the
   list is pinned to `PANEL_WIDTH` so it does not shift by a pixel either way.
 
+- **Records are the model; tokens are a link.** Stats live in one array in
+  scene metadata, keyed by nothing but the record's own id. That is what lets a
+  record exist before a token does, survive the token being deleted, and be
+  moved to a different token without losing anything.
 - **Attachments are local items.** Each client draws its own bubbles from the
-  shared token metadata, so the scene file stays clean, undo history is not
-  full of bubble items, and nothing is replicated four times per token.
-- **Metadata is written only when you edit.** A token with no metadata parses to
-  defaults and still lists, so opening the panel never mutates the map.
+  shared records, so the scene file stays clean, undo history is not full of
+  bubble items, and nothing is replicated four times per token.
+- **Writes re-read first.** Every record is in one array under one key, so a
+  write is built from the scene's current metadata rather than the copy the
+  panel is holding — otherwise two people editing different records would
+  overwrite each other wholesale. It narrows the race to a single call rather
+  than eliminating it; the per-item writes this replaced could not race at all,
+  which is the price of the record model.
+- **Linking is exclusive.** Assigning a token clears it from any other record
+  first. Two records pointing at one token would draw two sets of bubbles on
+  top of each other.
 - **The sync loop diffs.** It compares a signature string per token and only
   rebuilds bubbles whose geometry or stats actually moved.
 - **Bubbles key off metadata presence, not value.** A monster knocked to 0 HP
@@ -174,11 +189,11 @@ src/ui/      the panel
 
 ### Two defaults you may want to change
 
-- New tokens land in **Adversaries** — `DEFAULT_CATEGORY` in
-  `src/core/metadata.ts`.
 - AC allows three characters — `AC_MAX_LENGTH` in `src/core/ac.ts`.
+- Record names cap at 32 characters — `RECORD_NAME_MAX_LENGTH` in
+  `src/core/records.ts`.
 - Condition and resource names cap at 24 characters —
-  `ENTRY_NAME_MAX_LENGTH` in `src/core/metadata.ts`.
+  `ENTRY_NAME_MAX_LENGTH` in `src/core/entries.ts`.
 - Four condition circles per token — `MAX_CONDITION_BUBBLES` in
   `src/obr/attachments.ts`.
 - HP floors at 0 and is capped by max HP once one is set; a max of 0 means no

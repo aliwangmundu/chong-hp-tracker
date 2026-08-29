@@ -4,23 +4,18 @@ import { getPluginId } from "./pluginId";
 export const SETTINGS_KEY = getPluginId("settings");
 
 export type Settings = {
-  /** Hides the Adversaries list from players. Token bubbles are unaffected. */
-  hideAdversaries: boolean;
   /** Combat round. Counts from 1; advancing it counts conditions down. */
   round: number;
 };
 
 export const FIRST_ROUND = 1;
 
-export const DEFAULT_SETTINGS: Settings = {
-  hideAdversaries: false,
-  round: FIRST_ROUND,
-};
+export const DEFAULT_SETTINGS: Settings = { round: FIRST_ROUND };
 
 /**
  * Settings live on the scene, not on the player.
  *
- * The GM flips it once and every client agrees, including people who join
+ * The round is set once and every client agrees, including people who join
  * later — which a per-client setting could not do.
  */
 export function parseSettings(metadata: Metadata): Settings {
@@ -31,7 +26,6 @@ export function parseSettings(metadata: Metadata): Settings {
   const round = source["round"];
 
   return {
-    hideAdversaries: source["hideAdversaries"] === true,
     round:
       typeof round === "number" && Number.isFinite(round)
         ? Math.max(FIRST_ROUND, Math.trunc(round))
@@ -48,10 +42,6 @@ export function parseSettings(metadata: Metadata): Settings {
 async function patchSettings(patch: Partial<Settings>): Promise<void> {
   const current = parseSettings(await OBR.scene.getMetadata());
   await OBR.scene.setMetadata({ [SETTINGS_KEY]: { ...current, ...patch } });
-}
-
-export async function setHideAdversaries(hidden: boolean): Promise<void> {
-  await patchSettings({ hideAdversaries: hidden });
 }
 
 export async function setRound(round: number): Promise<void> {

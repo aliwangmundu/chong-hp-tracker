@@ -1,16 +1,3 @@
-export type Category = "PLAYER" | "ADVERSARY";
-
-export const CATEGORIES: readonly Category[] = ["PLAYER", "ADVERSARY"] as const;
-
-/**
- * The stored key stays "PLAYER" while the label reads "Allies" — renaming the
- * key would orphan the category on every token already saved in a scene.
- */
-export const CATEGORY_LABEL: Record<Category, string> = {
-  PLAYER: "Allies",
-  ADVERSARY: "Adversaries",
-};
-
 /** A named effect with a countdown the round tracker drives. */
 export type Condition = {
   id: string;
@@ -25,38 +12,37 @@ export type Resource = {
   value: number;
 };
 
-/** Everything this extension stores on a token. */
-export type TokenStats = {
+/**
+ * One line in the tracker.
+ *
+ * The record is the thing that exists — it is created by hand, carries all the
+ * stats, and lives in scene metadata. A token is an optional attachment: link
+ * one and the bubbles get somewhere to draw, or leave it unlinked and the
+ * record is still perfectly usable as a line in the list.
+ */
+export type TrackedRecord = {
+  id: string;
+  name: string;
+  /** Scene item this record draws on, or null when nothing is linked. */
+  tokenId: string | null;
   hp: number;
   /** Added to HP for the bubble on the token. Temporary hit points. */
   extraHp: number;
-  /** Recorded but never drawn on the map. */
+  /** Recorded but never drawn on the map. Caps the HP field. */
   maxHp: number;
-  /** Free text so "M", "?" or "18" are all valid. */
+  /** Free text so "M", "?" and "18" are all valid. */
   ac: string;
   conditions: Condition[];
   resources: Resource[];
-  category: Category;
-  /** Sort position within the token's category. -1 means "not placed yet". */
-  index: number;
+  /** GM-only: keeps this line off everyone else's panel. */
+  hidden: boolean;
 };
 
-/** Which stats are actually being tracked, so bubbles only show when asked for. */
-export type TrackedStats = {
-  hp: boolean;
-  ac: boolean;
-};
-
-/** A token as the UI sees it: scene identity plus its stats. */
-export type TrackedToken = {
+/** A scene token that a record can be linked to. */
+export type AssignableToken = {
   id: string;
   name: string;
   imageUrl: string;
-  visible: boolean;
-  stats: TokenStats;
 };
 
 export type NumericStatKey = "hp" | "extraHp" | "maxHp";
-export type StatKey = NumericStatKey | "ac";
-
-export const UNPLACED_INDEX = -1;
