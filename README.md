@@ -10,15 +10,15 @@ without it.
 - **You build the list.** `+` in the top bar adds a record: a name, HP, AC and
   whatever else you fill in. Nothing appears on its own, and nothing vanishes
   because a token moved layers or left the scene.
-- **Link a token when you want one.** Select a token on the map, open a
-  record's details, and press **Link selected**. That is what gives the bubbles
-  somewhere to draw. Unlink at any time — the record and its stats stay put.
-  A token belongs to one record at a time; linking it elsewhere moves it.
+- **Link a token when you want one.** Select a token on the map, expand a
+  record, and press **Link**. That is what gives the bubbles somewhere to draw.
+  Unlink at any time — the record and its stats stay put. A token belongs to one
+  record at a time; linking it elsewhere moves it.
 - **The row shows token, name and HP — and HP is the only thing you can edit
   there.** Everything else opens in a panel underneath the row, which is also
   the only place it can be changed. A mistimed click during combat can cost you
   a hit point; it can never rename a character or unlink its token.
-  Drag rows to reorder; the order sticks with the scene.
+  Drag rows to reorder; the order sticks.
 - **Categories, made by anyone.** The folder button adds one. Rename it in
   place, drag records into it, and hide the whole thing with the eye. Records
   not filed anywhere sit in an **Ungrouped** section at the top.
@@ -44,7 +44,7 @@ without it.
   fields — arithmetic entry is for HP only, where "-25" is what you actually
   mean.
 - **A round counter** sits above the list: `‹ Round 3 ›`. Advancing it counts
-  every condition in the scene down by one; stepping back counts them up, so
+  every condition on every record down by one; stepping back counts them up, so
   the two arrows undo each other.
 - **Conditions and resources**, any number of each, at the bottom of the
   expanded row. A condition is a name and a countdown the round drives. A
@@ -52,8 +52,9 @@ without it.
   with `‹ ›` either side of it. Both have a small `×` to remove them.
 - **Condition circles on the token.** Up to four along the top edge, each
   showing that condition's remaining duration, turning red at 0.
-- **Nothing carries between scenes.** Records live in the scene's metadata, so
-  each scene has its own list.
+- **The list follows you between scenes.** Records, categories and the round
+  live in the room, not the scene, so the same party is there whichever map you
+  open. Token links are the exception — see below.
 - **Hiding is a property of the category.** Players never see a hidden category
   or anything in it; the GM always sees every one. New categories start hidden,
   so staging the next wave takes one step and reveals in one click. Bubbles on
@@ -159,9 +160,20 @@ src/ui/      the panel
   number you can retype, not an identity you have to reconstruct.
 
 - **Records are the model; tokens are a link.** Stats live in one array in
-  scene metadata, keyed by nothing but the record's own id. That is what lets a
+  room metadata, keyed by nothing but the record's own id. That is what lets a
   record exist before a token does, survive the token being deleted, and be
   moved to a different token without losing anything.
+- **Room metadata is the whole of the cross-scene persistence.** It is scoped to
+  the room and outlives any scene. This works now only because a record has its
+  own id; the earlier attempt had to match a character back to a token by name
+  and image, and that guesswork is what made it unreliable.
+- **A token link is a scene item id, and those are per-scene.** So a link made
+  on one map is inert on another — the row says "Not in this scene" and draws
+  nothing — and comes back to life when you return. Each record holds one link
+  at a time, so re-linking on a second map replaces the first.
+- **Upgrading lifts an old scene list into the room, once.** It only fires when
+  the room holds nothing at all, so it can never overwrite a real list, and only
+  the GM runs it so two clients cannot race to import the same thing.
 - **Attachments are local items.** Each client draws its own bubbles from the
   shared records, so the scene file stays clean, undo history is not full of
   bubble items, and nothing is replicated four times per token.

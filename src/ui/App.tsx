@@ -38,8 +38,11 @@ import {
   withoutRecord,
 } from "@/core/records";
 import {
+  EMPTY_STATE,
   type TrackerState,
+  migrateSceneToRoom,
   parseState,
+  readState,
   updateState,
 } from "@/core/recordStore";
 import { FIRST_ROUND, parseSettings, setRound } from "@/core/settings";
@@ -64,8 +67,6 @@ import RoundBar from "./RoundBar";
  */
 const PANEL_WIDTH = 288;
 
-const EMPTY_STATE: TrackerState = { records: [], categories: [] };
-
 export default function App() {
   const [state, setState] = useState<TrackerState>(EMPTY_STATE);
   const [tokens, setTokens] = useState(new Map<string, AssignableToken>());
@@ -84,8 +85,8 @@ export default function App() {
       if (ready) {
         void OBR.scene.items.getItems(isAssignableItem).then(update);
       } else {
+        // Only the tokens are scene-bound; the records outlive the scene.
         setTokens(new Map());
-        setState(EMPTY_STATE);
       }
     };
 
@@ -99,16 +100,28 @@ export default function App() {
     };
   }, []);
 
-  // Records, categories and the round all live in scene metadata.
+  /**
+   * Records, categories and the round all live in *room* metadata.
+   *
+   * That is what carries them from scene to scene, and it is why this is not
+   * gated on a scene being open — the list is there before you pick a map.
+   */
   useEffect(() => {
-    if (!sceneReady) return;
     const apply = (metadata: Metadata) => {
       setState(parseState(metadata));
       setRoundState(parseSettings(metadata).round);
     };
-    void OBR.scene.getMetadata().then(apply);
-    return OBR.scene.onMetadataChange(apply);
-  }, [sceneReady]);
+    void OBR.room.getMetadata().then(apply);
+    return OBR.room.onMetadataChange(apply);
+  }, []);
+
+  // Lift a pre-2.3 scene's list into the room, once, if the room is empty.
+  useEffect(() => {
+    if (!sceneReady || !isGm) return;
+    void migrateSceneToRoom(isGm).then(async (moved) => {
+      if (moved) setState(await readState());
+    });
+  }, [isGm, sceneReady]);
 
   useEffect(() => {
     void OBR.player.getSelection().then((ids) => setSelection(ids ?? []));
@@ -438,9 +451,7 @@ export default function App() {
         />
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">
-          {!sceneReady ? (
-            <Placeholder>Open a scene to start tracking.</Placeholder>
-          ) : visibleCount === 0 && visibleCategories.length === 0 ? (
+          {visibleCount === 0 && visibleCategories.length === 0 ? (
             <Placeholder>
               Add a record with <strong>+</strong>, then link a token to it.
             </Placeholder>

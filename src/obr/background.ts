@@ -13,10 +13,10 @@ import {
 /**
  * Draws the HP, AC and condition bubbles on linked tokens.
  *
- * Two inputs now, not one: the records live in scene metadata and the tokens
- * live in the scene, so a redraw is triggered by either changing. A record with
- * no token, or one pointing at a token that has been deleted, simply draws
- * nothing.
+ * Two inputs, not one: the records live in room metadata and the tokens live in
+ * the scene, so a redraw is triggered by either changing. A record with no
+ * token — or one whose token belongs to a different scene — simply draws
+ * nothing here.
  *
  * Attachments are *local* items: every client renders its own from the shared
  * records. That keeps them out of the saved scene, out of undo history, and
@@ -88,7 +88,7 @@ async function start(): Promise<void> {
 
   sceneDpi = await OBR.scene.grid.getDpi();
   [records, tokens] = await Promise.all([
-    OBR.scene.getMetadata().then(parseRecords),
+    OBR.room.getMetadata().then(parseRecords),
     OBR.scene.items.getItems<Image>(isAssignableItem),
   ]);
   await refresh();
@@ -98,7 +98,7 @@ async function start(): Promise<void> {
     void sync();
   });
 
-  OBR.scene.onMetadataChange((metadata: Metadata) => {
+  OBR.room.onMetadataChange((metadata: Metadata) => {
     records = parseRecords(metadata);
     void sync();
   });
