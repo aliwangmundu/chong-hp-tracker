@@ -1,15 +1,15 @@
 {
   "name": "Chong HP Tracker",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "manifest_version": 2,
   "author": "Julian",
-  "icon": "/chong-hp-tracker/icon.svg?v=2.5.0",
+  "icon": "/chong-hp-tracker/icon.svg?v=2.6.0",
   "description": "HP, AC, conditions, resources and a round counter.",
-  "background_url": "/chong-hp-tracker/background.html?v=2.5.0",
+  "background_url": "/chong-hp-tracker/background.html?v=2.6.0",
   "action": {
     "title": "Chong HP Tracker",
-    "icon": "/chong-hp-tracker/icon.svg?v=2.5.0",
-    "popover": "/chong-hp-tracker/action.html?v=2.5.0",
+    "icon": "/chong-hp-tracker/icon.svg?v=2.6.0",
+    "popover": "/chong-hp-tracker/action.html?v=2.6.0",
     "height": 500,
     "width": 288
   }

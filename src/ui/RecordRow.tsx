@@ -12,10 +12,15 @@ import StatField from "./StatField";
 type Props = {
   record: TrackedRecord;
   token: AssignableToken | undefined;
+  /** The token selected on the map, if exactly one is. Enables linking. */
+  selectedToken: AssignableToken | undefined;
   selected: boolean;
+  chosen: boolean;
   expanded: boolean;
   onStatChange: (id: string, key: NumericStatKey, value: number) => void;
   onToggleExpanded: (id: string) => void;
+  onToggleChosen: (id: string) => void;
+  onAssign: (id: string, tokenId: string) => void;
 };
 
 /**
@@ -49,19 +54,26 @@ async function focusToken(id: string): Promise<void> {
 }
 
 /**
- * The always-visible line: token, name, HP.
+ * The always-visible line: token slot, name, HP.
  *
- * HP is the only thing editable here. Everything else — the name included —
+ * HP is the only value editable here. Everything else — the name included —
  * lives in the expanded panel, so a mistimed click during combat can cost you a
- * hit point but never rename a character or unlink its token.
+ * hit point but never rename a character.
+ *
+ * The other two things a click does here are cheap and reversible: the slot
+ * links a token, and the name puts the row in Chosen.
  */
 export default function RecordRow({
   record,
   token,
+  selectedToken,
   selected,
+  chosen,
   expanded,
   onStatChange,
   onToggleExpanded,
+  onToggleChosen,
+  onAssign,
 }: Props) {
   const {
     attributes,
@@ -71,6 +83,8 @@ export default function RecordRow({
     transition,
     isDragging,
   } = useSortable({ id: record.id });
+
+  const canLink = token === undefined && selectedToken !== undefined;
 
   return (
     <div
@@ -88,46 +102,77 @@ export default function RecordRow({
     >
       <button
         type="button"
-        disabled={token === undefined}
+        disabled={token === undefined && !canLink}
         title={
-          token === undefined
-            ? "No token linked — expand the row to link one"
-            : `Focus ${token.name}`
+          canLink
+            ? `Link ${selectedToken.name}`
+            : token !== undefined
+              ? `Focus ${token.name}`
+              : "Select a token on the map, then click here to link it"
+        }
+        aria-label={
+          canLink ? `Link ${selectedToken.name}` : "Token"
         }
         onClick={() => {
+          if (canLink) {
+            onAssign(record.id, selectedToken.id);
+            return;
+          }
           if (record.tokenId !== null) void focusToken(record.tokenId);
         }}
         onPointerDown={(event) => event.stopPropagation()}
         className={[
-          "size-7 shrink-0 overflow-hidden rounded outline-none",
+          "relative size-7 shrink-0 overflow-hidden rounded outline-none",
           "focus-visible:ring-2 focus-visible:ring-ink-400",
           selected ? "ring-2 ring-ink-500 dark:ring-ink-300" : "",
           token === undefined
             ? "border border-dashed border-ink-300 dark:border-ink-700"
             : "",
+          canLink
+            ? "border-ink-400 bg-ink-200/60 text-ink-700 dark:border-ink-500 dark:bg-ink-800/60 dark:text-ink-200"
+            : "",
         ].join(" ")}
       >
-        {token === undefined ? (
-          <span className="sr-only">No token linked</span>
-        ) : (
+        {token !== undefined ? (
           <img
             src={token.imageUrl}
             alt=""
             draggable={false}
             className="drag-none size-full object-contain"
           />
+        ) : canLink ? (
+          // Only offered when there is something to link — an empty slot with
+          // nothing selected is inert, not a button that does nothing.
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+            aria-hidden
+            className="size-full p-1.5"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        ) : (
+          <span className="sr-only">No token linked</span>
         )}
       </button>
 
-      <span
+      <button
+        type="button"
+        onClick={() => onToggleChosen(record.id)}
+        onPointerDown={(event) => event.stopPropagation()}
+        aria-pressed={chosen}
+        title={chosen ? "Remove from Chosen" : "Move to Chosen"}
         className={[
-          "min-w-0 flex-1 truncate px-1 text-sm",
+          "min-w-0 flex-1 truncate rounded px-1 py-1 text-left text-sm",
+          "transition-colors hover:bg-ink-200/60 dark:hover:bg-ink-800/60",
           record.name === "" ? "text-ink-400 dark:text-ink-600" : "",
         ].join(" ")}
-        title={record.name || token?.name || "Unnamed"}
       >
         {record.name || token?.name || "Unnamed"}
-      </span>
+      </button>
 
       <StatField
         label={`${record.name || "Record"} hit points`}
@@ -143,7 +188,7 @@ export default function RecordRow({
         type="button"
         aria-label={`${expanded ? "Collapse" : "Expand"} ${record.name || "record"}`}
         aria-expanded={expanded}
-        title={expanded ? "Collapse" : "Name, token, AC and more"}
+        title={expanded ? "Collapse" : "Note, name, AC and more"}
         onClick={() => onToggleExpanded(record.id)}
         onPointerDown={(event) => event.stopPropagation()}
         className={[

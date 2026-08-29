@@ -14,13 +14,12 @@ import StatField from "./StatField";
 type Props = {
   record: TrackedRecord;
   token: AssignableToken | undefined;
-  /** The token currently selected on the map, if exactly one is. */
-  selectedToken: AssignableToken | undefined;
   onStatChange: (id: string, key: NumericStatKey, value: number) => void;
   onAcChange: (id: string, value: string) => void;
   onNameChange: (id: string, value: string) => void;
   onNoteChange: (id: string, value: string) => void;
   onConditionsChange: (id: string, next: Condition[]) => void;
+  /** Only ever called with null here — linking happens from the row's slot. */
   onAssign: (id: string, tokenId: string | null) => void;
   onDelete: (id: string) => void;
 };
@@ -41,7 +40,6 @@ type Props = {
 export default function RecordDetails({
   record,
   token,
-  selectedToken,
   onStatChange,
   onAcChange,
   onNameChange,
@@ -94,21 +92,6 @@ export default function RecordDetails({
                   ? "Nothing linked"
                   : "Not in this scene"}
             </span>
-            <SmallButton
-              disabled={selectedToken === undefined}
-              title={
-                selectedToken === undefined
-                  ? "Select one token on the map first"
-                  : `Link ${selectedToken.name}`
-              }
-              onClick={() => {
-                if (selectedToken !== undefined) {
-                  onAssign(record.id, selectedToken.id);
-                }
-              }}
-            >
-              Link
-            </SmallButton>
             {record.tokenId !== null && (
               <SmallButton
                 title="Unlink the token — the record stays"

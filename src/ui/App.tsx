@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import OBR, { type Item, type Metadata } from "@owlbear-rodeo/sdk";
@@ -46,7 +47,7 @@ import {
   readState,
   updateState,
 } from "@/core/recordStore";
-import { FIRST_ROUND, parseSettings, setRound } from "@/core/settings";
+import { FIRST_ROUND } from "@/core/settings";
 import { indexTokens, isAssignableItem } from "@/core/tokens";
 import type {
   AssignableToken,
@@ -68,15 +69,21 @@ import RoundBar from "./RoundBar";
  */
 const PANEL_WIDTH = 288;
 
+/** Collapse keys for the two sections that are not real categories. */
+const CHOSEN_ID = "chosen";
+const UNGROUPED_ID = "ungrouped";
+
 export default function App() {
   const [state, setState] = useState<TrackerState>(EMPTY_STATE);
   const [tokens, setTokens] = useState(new Map<string, AssignableToken>());
   const [selection, setSelection] = useState<string[]>([]);
   const [sceneReady, setSceneReady] = useState(false);
   const [isGm, setIsGm] = useState(false);
-  const [round, setRoundState] = useState(FIRST_ROUND);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
+  /** Per-person working set. Never written to the room. */
+  const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 
   // Scene tokens — only for linking, thumbnails and names.
   useEffect(() => {
@@ -109,10 +116,7 @@ export default function App() {
    * gated on a scene being open — the list is there before you pick a map.
    */
   useEffect(() => {
-    const apply = (metadata: Metadata) => {
-      setState(parseState(metadata));
-      setRoundState(parseSettings(metadata).round);
-    };
+    const apply = (metadata: Metadata) => setState(parseState(metadata));
     void OBR.room.getMetadata().then(apply);
     return OBR.room.onMetadataChange(apply);
   }, []);
@@ -220,7 +224,7 @@ export default function App() {
           });
         }
 
-        return { records, categories };
+        return { ...current, records, categories };
       });
     },
     [edit],
@@ -234,6 +238,7 @@ export default function App() {
   const deleteCategory = useCallback(
     (id: string) =>
       edit((current) => ({
+        ...current,
         categories: withoutCategory(current.categories, id),
         records: current.records.map((record) =>
           record.categoryId === id ? { ...record, categoryId: null } : record,
@@ -294,31 +299,80 @@ export default function App() {
   );
 
   /**
-   * Advancing the round counts every condition in the scene down by one.
+   * Advancing the round counts every condition down by one.
    *
-   * Stepping back counts them up again, so the two arrows undo each other and
-   * a mis-click costs nothing.
+   * Stepping back counts them up again, so the two arrows undo each other and a
+   * mis-click costs nothing. The round and the conditions move in a single
+   * write: as two writes, each echoed back a snapshot the other had not landed
+   * in yet and the second echo reverted the first.
    */
   const stepRound = useCallback(
     (delta: 1 | -1) => {
-      const next = Math.max(FIRST_ROUND, round + delta);
-      if (next === round) return;
-
-      setRoundState(next);
-      editRecords((current) =>
-        current.map((record) =>
-          record.conditions.length === 0
-            ? record
-            : {
-                ...record,
-                conditions: stepDurations(record.conditions, -delta),
-              },
-        ),
-      );
-      void setRound(next).catch(() => setRoundState(round));
+      edit((current) => {
+        const next = Math.max(FIRST_ROUND, current.round + delta);
+        if (next === current.round) return current;
+        return {
+          ...current,
+          round: next,
+          records: current.records.map((record) =>
+            record.conditions.length === 0
+              ? record
+              : {
+                  ...record,
+                  conditions: stepDurations(record.conditions, -delta),
+                },
+          ),
+        };
+      });
     },
-    [editRecords, round],
+    [edit],
   );
+
+  /**
+   * Selecting a token on the map puts its record in Chosen; deselecting takes
+   * it out again.
+   *
+   * Only the ids the selection itself contributed are withdrawn, so a row you
+   * put there by clicking its name is not swept away when you click the map.
+   */
+  const fromTokens = useRef<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    const derived = new Set<string>();
+    for (const record of state.records) {
+      if (record.tokenId !== null && selection.includes(record.tokenId)) {
+        derived.add(record.id);
+      }
+    }
+
+    const previous = fromTokens.current;
+    const unchanged =
+      previous.size === derived.size && [...derived].every((id) => previous.has(id));
+    if (unchanged) return;
+
+    fromTokens.current = derived;
+    setChosen((current) => {
+      const next = new Set(current);
+      for (const id of previous) if (!derived.has(id)) next.delete(id);
+      for (const id of derived) next.add(id);
+      return next;
+    });
+  }, [selection, state.records]);
+
+  const toggleChosen = useCallback((id: string) => {
+    setChosen((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleCollapsed = useCallback((key: string) => {
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  }, []);
 
   /**
    * What this person is allowed to see.
@@ -339,24 +393,34 @@ export default function App() {
     const known = new Set(state.categories.map((category) => category.id));
     const allowed = new Set(visibleCategories.map((category) => category.id));
 
+    const picked: TrackedRecord[] = [];
     const ungrouped: TrackedRecord[] = [];
     const byCategory = new Map<string, TrackedRecord[]>();
     for (const category of visibleCategories) byCategory.set(category.id, []);
 
     for (const record of state.records) {
       const id = record.categoryId;
-      if (id === null || !known.has(id)) {
+      const filed = id !== null && known.has(id);
+      // A hidden category hides its records even from Chosen — otherwise a
+      // player could pull one out of a category they cannot see.
+      if (filed && !allowed.has(id)) continue;
+
+      if (chosen.has(record.id)) {
+        picked.push(record);
+        continue;
+      }
+      if (!filed) {
         ungrouped.push(record);
         continue;
       }
-      if (!allowed.has(id)) continue;
       byCategory.get(id)?.push(record);
     }
 
-    return { ungrouped, byCategory };
-  }, [state.categories, state.records, visibleCategories]);
+    return { picked, ungrouped, byCategory };
+  }, [chosen, state.categories, state.records, visibleCategories]);
 
   const visibleCount =
+    groups.picked.length +
     groups.ungrouped.length +
     [...groups.byCategory.values()].reduce(
       (total, list) => total + list.length,
@@ -414,6 +478,7 @@ export default function App() {
       if (activeId === overId) return;
 
       const asSection = categoryFromDroppableId(overId);
+      if (asSection === CHOSEN_ID) return;
       if (asSection !== undefined) {
         editRecords((current) =>
           moveRecordInto(current, activeId, asSection, null),
@@ -449,18 +514,21 @@ export default function App() {
             <RecordRow
               record={record}
               token={token}
+              selectedToken={selectedToken}
               selected={
                 record.tokenId !== null && selection.includes(record.tokenId)
               }
+              chosen={chosen.has(record.id)}
               expanded={expandedId === record.id}
               onStatChange={handleStatChange}
               onToggleExpanded={toggleExpanded}
+              onToggleChosen={toggleChosen}
+              onAssign={handleAssign}
             />
             {expandedId === record.id && (
               <RecordDetails
                 record={record}
                 token={token}
-                selectedToken={selectedToken}
                 onStatChange={handleStatChange}
                 onAcChange={handleAcChange}
                 onNameChange={handleNameChange}
@@ -483,9 +551,9 @@ export default function App() {
         style={{ width: PANEL_WIDTH }}
       >
         <RoundBar
-          round={round}
+          round={state.round}
           onStep={stepRound}
-          canStepBack={round > FIRST_ROUND}
+          canStepBack={state.round > FIRST_ROUND}
           onAddRecord={addRecord}
           onAddCategory={addCategory}
           onToggleCommand={() => setCommandOpen((open) => !open)}
@@ -511,6 +579,25 @@ export default function App() {
               modifiers={[restrictToFirstScrollableAncestor]}
               onDragEnd={handleDragEnd}
             >
+              {/* Always present — it is the working set, and an empty one
+                  still has to be a drop target. */}
+              <CategorySection
+                categoryId={CHOSEN_ID}
+                name="Chosen"
+                hidden={false}
+                count={groups.picked.length}
+                editable={false}
+                accent
+                collapsed={collapsed.has(CHOSEN_ID)}
+                onToggleCollapsed={() => toggleCollapsed(CHOSEN_ID)}
+                emptyHint="Click a name, or select a token on the map."
+                onRename={() => {}}
+                onToggleHidden={() => {}}
+                onDelete={() => {}}
+              >
+                {renderRows(groups.picked)}
+              </CategorySection>
+
               {groups.ungrouped.length > 0 && (
                 <CategorySection
                   categoryId={null}
@@ -518,6 +605,8 @@ export default function App() {
                   hidden={false}
                   count={groups.ungrouped.length}
                   editable={false}
+                  collapsed={collapsed.has(UNGROUPED_ID)}
+                  onToggleCollapsed={() => toggleCollapsed(UNGROUPED_ID)}
                   onRename={() => {}}
                   onToggleHidden={() => {}}
                   onDelete={() => {}}
@@ -536,6 +625,8 @@ export default function App() {
                     hidden={category.hidden}
                     count={records.length}
                     editable
+                    collapsed={collapsed.has(category.id)}
+                    onToggleCollapsed={() => toggleCollapsed(category.id)}
                     onRename={(name) =>
                       editCategories((current) =>
                         withCategory(current, category.id, { name }),

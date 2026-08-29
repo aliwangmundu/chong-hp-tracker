@@ -16,11 +16,16 @@ type Props = {
   name: string;
   hidden: boolean;
   count: number;
-  /** False for the ungrouped pseudo-section, which has nothing to rename. */
+  /** False for the ungrouped and Chosen sections, which have nothing to rename. */
   editable: boolean;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  /** Chosen is styled apart: it is a working set, not a filing cabinet. */
+  accent?: boolean;
   onRename: (next: string) => void;
   onToggleHidden: () => void;
   onDelete: () => void;
+  emptyHint?: string;
   children: ReactNode;
 };
 
@@ -36,9 +41,13 @@ export default function CategorySection({
   hidden,
   count,
   editable,
+  collapsed,
+  onToggleCollapsed,
+  accent = false,
   onRename,
   onToggleHidden,
   onDelete,
+  emptyHint = "Drag a record here.",
   children,
 }: Props) {
   const { setNodeRef, isOver } = useDroppable({
@@ -47,11 +56,42 @@ export default function CategorySection({
 
   return (
     <section className="pb-1">
-      <header className="flex items-center gap-1 px-2 pb-1 pt-3">
+      <header className="flex items-center gap-1 px-1 pb-1 pt-3">
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "Expand section" : "Collapse section"}
+          title={collapsed ? "Expand" : "Collapse"}
+          className="flex size-5 shrink-0 items-center justify-center rounded text-ink-400 transition-colors hover:bg-ink-200 hover:text-ink-800 dark:text-ink-600 dark:hover:bg-ink-800 dark:hover:text-ink-100"
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+            className={collapsed ? "-rotate-90" : ""}
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+
         {editable ? (
           <NameField value={name} onCommit={onRename} />
         ) : (
-          <h2 className="truncate text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
+          <h2
+            className={[
+              "truncate text-[11px] font-semibold uppercase tracking-wider",
+              accent
+                ? "text-amber-700 dark:text-amber-400"
+                : "text-ink-500 dark:text-ink-400",
+            ].join(" ")}
+          >
             {name || "Untitled"}
           </h2>
         )}
@@ -98,21 +138,26 @@ export default function CategorySection({
         )}
       </header>
 
-      <div
-        ref={setNodeRef}
-        className={[
-          "min-h-[2.25rem] rounded-lg transition-colors",
-          isOver ? "bg-ink-200/50 dark:bg-ink-900/70" : "",
-        ].join(" ")}
-      >
-        {count === 0 ? (
-          <p className="px-2 py-2 text-xs text-ink-400 dark:text-ink-600">
-            Drag a record here.
-          </p>
-        ) : (
-          children
-        )}
-      </div>
+      {!collapsed && (
+        <div
+          ref={setNodeRef}
+          className={[
+            "min-h-[2.25rem] rounded-lg transition-colors",
+            isOver ? "bg-ink-200/50 dark:bg-ink-900/70" : "",
+            accent
+              ? "bg-amber-100/50 ring-1 ring-amber-300/60 dark:bg-amber-950/20 dark:ring-amber-800/50"
+              : "",
+          ].join(" ")}
+        >
+          {count === 0 ? (
+            <p className="px-2 py-2 text-xs text-ink-400 dark:text-ink-600">
+              {emptyHint}
+            </p>
+          ) : (
+            children
+          )}
+        </div>
+      )}
     </section>
   );
 }

@@ -10,19 +10,24 @@ without it.
 - **You build the list.** `+` in the top bar adds a record: a name, HP, AC and
   whatever else you fill in. Nothing appears on its own, and nothing vanishes
   because a token moved layers or left the scene.
-- **Link a token when you want one.** Select a token on the map, expand a
-  record, and press **Link**. That is what gives the bubbles somewhere to draw.
-  Unlink at any time — the record and its stats stay put. A token belongs to one
-  record at a time; linking it elsewhere moves it.
+- **Link a token in two clicks.** Select it on the map, then click the empty
+  slot at the left of a row — a **+** appears there when something is selected,
+  and the slot is inert when nothing is. That is what gives the bubbles
+  somewhere to draw. Unlink from the expanded row; the record and its stats stay
+  put. A token belongs to one record at a time; linking it elsewhere moves it.
 - **The row shows token, name and HP — and HP is the only thing you can edit
   there.** Everything else opens in a panel underneath the row, which is also
   the only place it can be changed. A mistimed click during combat can cost you
   a hit point; it can never rename a character or unlink its token.
   Drag rows to reorder; the order sticks.
+- **Chosen**, pinned at the top and not removable. Click a record's name to move
+  it there, click again to send it back. Selecting a token on the map puts its
+  record there too, and deselecting takes it out. It is the same record either
+  way — editing it in Chosen edits the real thing, not a copy.
 - **Categories, made by anyone.** The folder button adds one. Rename it in
   place, drag records into it, and hide the whole thing with the eye. Records
-  not filed anywhere sit in an **Ungrouped** section at the top. Dragging is the
-  only way to file a record — it is faster than a dropdown and you can see where
+  not filed anywhere sit in an **Ungrouped** section. Every section collapses
+  from the chevron by its heading. Dragging is the only way to file a record — it is faster than a dropdown and you can see where
   it lands.
 - **A command bar for bulk entry**, on the terminal button. One line per record,
   name first, then any of these in any order:
@@ -170,6 +175,17 @@ src/ui/      the panel
   jitter. Expanding under the row keeps the list in place and drops the problem
   entirely. `PANEL_WIDTH` in `src/ui/App.tsx` and `action.width` in the manifest
   just have to agree.
+- **The round and its conditions are one write.** They were two — the records
+  in one call, the round in another — and because each re-read the room first,
+  each echoed back a snapshot the other had not landed in yet. The second echo
+  reverted the first, so the counters appeared not to move. Anything that
+  changes together now goes in a single `setMetadata`.
+- **Chosen is per-person and never stored.** It mirrors your map selection, and
+  a selection is already yours alone; writing it to the room would mean two
+  players fighting over one highlight.
+- **Only the ids the map selection contributed are withdrawn from Chosen.** A
+  row you put there by clicking its name survives clicking around the map,
+  which a naive "replace the set from the selection" would not.
 - **Only HP is editable in the row.** Every other value is edit-on-expand. The
   list is what you touch mid-combat, and the cost of a slip there should be a
   number you can retype, not an identity you have to reconstruct.

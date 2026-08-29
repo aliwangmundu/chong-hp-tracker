@@ -1,4 +1,4 @@
-import OBR, { type Metadata } from "@owlbear-rodeo/sdk";
+import type { Metadata } from "@owlbear-rodeo/sdk";
 import { getPluginId } from "./pluginId";
 
 export const SETTINGS_KEY = getPluginId("settings");
@@ -15,9 +15,9 @@ export const DEFAULT_SETTINGS: Settings = { round: FIRST_ROUND };
 /**
  * Settings live in room metadata, beside the records.
  *
- * The round drives the conditions on those records, so it has to follow them
- * across a scene change — a round that reset when you changed map would leave
- * every countdown measured against a number that no longer exists.
+ * The round drives the conditions on those records, so it travels with them —
+ * across scenes, and in the same write. `recordStore` owns the writing; this
+ * module only knows how to read the value back out.
  */
 export function parseSettings(metadata: Metadata): Settings {
   const raw = metadata[SETTINGS_KEY];
@@ -32,19 +32,4 @@ export function parseSettings(metadata: Metadata): Settings {
         ? Math.max(FIRST_ROUND, Math.trunc(round))
         : FIRST_ROUND,
   };
-}
-
-/**
- * Merges one field into the stored settings.
- *
- * `OBR.room.setMetadata` merges at the top level only, so writing our key
- * replaces the whole object — the current settings have to be read back in.
- */
-async function patchSettings(patch: Partial<Settings>): Promise<void> {
-  const current = parseSettings(await OBR.room.getMetadata());
-  await OBR.room.setMetadata({ [SETTINGS_KEY]: { ...current, ...patch } });
-}
-
-export async function setRound(round: number): Promise<void> {
-  await patchSettings({ round: Math.max(FIRST_ROUND, Math.trunc(round)) });
 }

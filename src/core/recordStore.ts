@@ -1,19 +1,26 @@
 import OBR from "@owlbear-rodeo/sdk";
 import { CATEGORIES_KEY, type CategoryDef, parseCategories } from "./categories";
 import { RECORDS_KEY, parseRecords } from "./records";
+import { FIRST_ROUND, SETTINGS_KEY, parseSettings } from "./settings";
 import type { TrackedRecord } from "./types";
 
 export type TrackerState = {
   records: TrackedRecord[];
   categories: CategoryDef[];
+  round: number;
 };
 
-export const EMPTY_STATE: TrackerState = { records: [], categories: [] };
+export const EMPTY_STATE: TrackerState = {
+  records: [],
+  categories: [],
+  round: FIRST_ROUND,
+};
 
 export function parseState(metadata: Record<string, unknown>): TrackerState {
   return {
     records: parseRecords(metadata),
     categories: parseCategories(metadata),
+    round: parseSettings(metadata).round,
   };
 }
 
@@ -22,29 +29,31 @@ export function isEmptyState(state: TrackerState): boolean {
 }
 
 /**
- * Records live in *room* metadata, not scene metadata.
+ * Everything lives in *room* metadata, not scene metadata.
  *
  * That is the whole of the cross-scene persistence: room metadata is scoped to
  * the room and outlives any individual scene, so the same list is there
  * whichever map you open. It works because a record is identified by its own
- * id — there is no matching a character back up to a token by name or image,
- * which is what made this fragile when stats lived on the tokens themselves.
+ * id — there is no matching a character back up to a token by name or image.
  */
 export async function readState(): Promise<TrackerState> {
   return parseState(await OBR.room.getMetadata());
 }
 
 /**
- * Read-modify-write against the live room metadata, both keys at once.
+ * Read-modify-write against the live room metadata — all three keys at once.
  *
- * Records and categories are separate keys but not independent — deleting a
- * category has to unfile its records in the same breath, or a refresh landing
- * between two writes would leave rows pointing at something that no longer
- * exists. `setMetadata` takes both keys in one call, so that is one write.
+ * They are separate keys but not independent, and writing them separately is a
+ * bug rather than a style choice. Advancing the round changes both the round
+ * and every condition it counts down; two writes means two round trips, each
+ * echoing back a snapshot the other has not landed in yet, and the second echo
+ * silently reverts the first. Deleting a category has the same shape: it must
+ * unfile its records in the same breath or a refresh between the writes leaves
+ * rows pointing at nothing.
  *
  * Reading first is what keeps two people editing different records from
- * overwriting each other wholesale; it narrows the race to a single call rather
- * than removing it.
+ * overwriting each other wholesale; it narrows that race to a single call
+ * rather than removing it.
  */
 export async function updateState(
   mutate: (state: TrackerState) => TrackerState,
@@ -53,6 +62,7 @@ export async function updateState(
   await OBR.room.setMetadata({
     [RECORDS_KEY]: next.records,
     [CATEGORIES_KEY]: next.categories,
+    [SETTINGS_KEY]: { round: next.round },
   });
 }
 
@@ -74,6 +84,7 @@ export async function migrateSceneToRoom(isGm: boolean): Promise<boolean> {
   await OBR.room.setMetadata({
     [RECORDS_KEY]: fromScene.records,
     [CATEGORIES_KEY]: fromScene.categories,
+    [SETTINGS_KEY]: { round: fromScene.round },
   });
   return true;
 }
