@@ -51,7 +51,6 @@ import type {
   AssignableToken,
   Condition,
   NumericStatKey,
-  Resource,
   TrackedRecord,
 } from "@/core/types";
 import CategorySection, {
@@ -212,15 +211,15 @@ export default function App() {
     [editRecords],
   );
 
-  const handleConditionsChange = useCallback(
-    (id: string, conditions: Condition[]) =>
-      editRecords((current) => withRecord(current, id, { conditions })),
+  const handleNoteChange = useCallback(
+    (id: string, note: string) =>
+      editRecords((current) => withRecord(current, id, { note })),
     [editRecords],
   );
 
-  const handleResourcesChange = useCallback(
-    (id: string, resources: Resource[]) =>
-      editRecords((current) => withRecord(current, id, { resources })),
+  const handleConditionsChange = useCallback(
+    (id: string, conditions: Condition[]) =>
+      editRecords((current) => withRecord(current, id, { conditions })),
     [editRecords],
   );
 
@@ -423,8 +422,8 @@ export default function App() {
                 onStatChange={handleStatChange}
                 onAcChange={handleAcChange}
                 onNameChange={handleNameChange}
+                onNoteChange={handleNoteChange}
                 onConditionsChange={handleConditionsChange}
-                onResourcesChange={handleResourcesChange}
                 onCategoryChange={handleCategoryChange}
                 onAssign={handleAssign}
                 onDelete={handleDelete}

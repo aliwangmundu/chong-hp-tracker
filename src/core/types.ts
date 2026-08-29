@@ -5,13 +5,6 @@ export type Condition = {
   duration: number;
 };
 
-/** A named counter nothing touches but the person clicking it. */
-export type Resource = {
-  id: string;
-  name: string;
-  value: number;
-};
-
 /**
  * One line in the tracker.
  *
@@ -32,8 +25,9 @@ export type TrackedRecord = {
   maxHp: number;
   /** Free text so "M", "?" and "18" are all valid. */
   ac: string;
+  /** Free text. Whatever you need to remember about this one. */
+  note: string;
   conditions: Condition[];
-  resources: Resource[];
   /** Category this record is filed under, or null for the ungrouped list. */
   categoryId: string | null;
 };

@@ -37,19 +37,17 @@ without it.
   `+ - * /` and parentheses work. An expression that will not parse flashes red
   and leaves the value alone rather than committing a wrong number.
 
-- **The chevron on each row** expands it in place. Inside: the name, the token
+- **The chevron on each row** expands it in place, full width and flush with
+  the row. Inside, top to bottom: a free-text **note**, the name, the token
   link, the group, then AC, extra HP (temporary hit points, added into the
   number on the token) and max HP (caps the HP field, never drawn on the map)
-  on one line, then conditions and resources. Extra and max are plain number
-  fields — arithmetic entry is for HP only, where "-25" is what you actually
-  mean.
+  on one line, then conditions. Extra and max are plain number fields —
+  arithmetic entry is for HP only, where "-25" is what you actually mean.
 - **A round counter** sits above the list: `‹ Round 3 ›`. Advancing it counts
   every condition on every record down by one; stepping back counts them up, so
   the two arrows undo each other.
-- **Conditions and resources**, any number of each, at the bottom of the
-  expanded row. A condition is a name and a countdown the round drives. A
-  resource is a name and a counter only you move — mana, ki, charges, arrows —
-  with `‹ ›` either side of it. Both have a small `×` to remove them.
+- **Conditions**, any number of them, at the bottom of the expanded row. Each
+  is a name and a countdown the round drives, with a small `×` to remove it.
 - **Condition circles on the token.** Up to four along the top edge, each
   showing that condition's remaining duration, turning red at 0.
 - **The list follows you between scenes.** Records, categories and the round
@@ -158,6 +156,12 @@ src/ui/      the panel
 - **Only HP is editable in the row.** Every other value is edit-on-expand. The
   list is what you touch mid-combat, and the cost of a slip there should be a
   number you can retype, not an identity you have to reconstruct.
+- **The expanded panel caps its own height and scrolls.** A record with a long
+  note and six conditions would otherwise push the rest of the roster off the
+  screen. The bar is hidden — it scrolls, it just does not advertise it.
+- **Notes are capped at 400 characters.** The whole tracker shares Owlbear's
+  16kB of room metadata, and free text is the one field that could eat it. Long
+  enough for a reminder, short enough that fifty records still fit.
 
 - **Records are the model; tokens are a link.** Stats live in one array in
   room metadata, keyed by nothing but the record's own id. That is what lets a

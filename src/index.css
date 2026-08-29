@@ -30,6 +30,15 @@
     margin: 0;
   }
 
+  /* Scrolls, but the bar itself is chrome the panel does not need. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   .drag-none {
     -webkit-user-drag: none;
     user-select: none;

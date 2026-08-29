@@ -1,17 +1,19 @@
 import { normalizeAc } from "./ac";
 import { ENTRY_NAME_MAX_LENGTH, newEntryId } from "./entries";
 import { getPluginId } from "./pluginId";
-import type {
-  Condition,
-  NumericStatKey,
-  Resource,
-  TrackedRecord,
-} from "./types";
+import type { Condition, NumericStatKey, TrackedRecord } from "./types";
 
 export const RECORDS_KEY = getPluginId("records");
 
 /** Record names are free text; a cap keeps one pasted essay out of the row. */
 export const RECORD_NAME_MAX_LENGTH = 32;
+
+/**
+ * Notes are capped because the whole tracker shares Owlbear's 16kB of room
+ * metadata. Long enough for a reminder, short enough that fifty records still
+ * fit.
+ */
+export const NOTE_MAX_LENGTH = 400;
 
 export function newRecord(name = ""): TrackedRecord {
   return {
@@ -22,8 +24,8 @@ export function newRecord(name = ""): TrackedRecord {
     extraHp: 0,
     maxHp: 0,
     ac: "",
+    note: "",
     conditions: [],
-    resources: [],
     categoryId: null,
   };
 }
@@ -88,6 +90,7 @@ export function parseRecords(
       ac: normalizeAc(
         typeof source["ac"] === "string" ? source["ac"] : "",
       ),
+      note: readText(source, "note", NOTE_MAX_LENGTH),
       conditions: readEntries<Condition>(
         source["conditions"],
         (entry, id, name) => ({
@@ -95,10 +98,6 @@ export function parseRecords(
           name,
           duration: readInt(entry, "duration"),
         }),
-      ),
-      resources: readEntries<Resource>(
-        source["resources"],
-        (entry, id, name) => ({ id, name, value: readInt(entry, "value") }),
       ),
       categoryId:
         typeof source["categoryId"] === "string"
