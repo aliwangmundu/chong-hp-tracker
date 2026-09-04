@@ -93,7 +93,9 @@ export default function RecordRow({
       className={[
         "group flex items-center gap-1 rounded-lg px-1 py-1",
         "hover:bg-ink-100/70 dark:hover:bg-ink-900/60",
-        isDragging ? "z-10 opacity-80 shadow-lg" : "",
+        // The floating overlay is the thing you are moving; this is the
+        // gap it left behind.
+        isDragging ? "opacity-30" : "",
         selected ? "bg-ink-100 dark:bg-ink-900" : "",
         expanded ? "bg-ink-100/80 dark:bg-ink-900/80" : "",
       ].join(" ")}

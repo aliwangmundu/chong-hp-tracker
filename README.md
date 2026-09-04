@@ -20,28 +20,35 @@ without it.
   the only place it can be changed. A mistimed click during combat can cost you
   a hit point; it can never rename a character or unlink its token.
   Drag rows to reorder; the order sticks.
-- **Two tabs, Player and DM, and a record is in exactly one of them.** Tick
-  **Player** at the bottom of a record's panel to hand it over: it appears on
-  the Player tab and leaves the DM tab in the same movement. Everything starts
-  on the DM tab, so a monster typed in mid-fight is never in front of the table
-  before you have looked at it. Both tabs are open to everyone — the tick sorts
-  records, it does not lock anyone out — and your role only picks which tab
-  opens first.
-  The DM tab is the workshop: categories, Chosen, drag-to-file. The Player tab
-  is a flat roster with the damage button and nothing else.
-- **A one-press damage button beside HP, in the player view.** It applies
+- **One row of tabs, one list at a time.** `Player · Chosen · Ungrouped` and
+  then a tab per category, so AZRAQI and Undead are two tabs rather than two
+  headings you scroll past. A record sits in exactly one of them, and the strip
+  costs one row of chrome no matter how many categories you keep.
+  Every tab is a drop target: drag a record up onto a tab and it files there.
+  That is what replaced dragging between sections, and it is still the only way
+  to file a record — it is faster than a dropdown and you can see where it
+  lands. Dragging onto a row inside the open tab reorders instead.
+  New records follow the open tab, so eight goblins typed in on **Undead** land
+  on Undead. Everyone gets the same strip; your role only picks which tab opens
+  first, and players simply have fewer tabs.
+- **Tick Player at the bottom of a record's panel** to hand it to the table: it
+  moves to the Player tab and leaves whichever tab it was on. Everything starts
+  with the GM, so a monster typed in mid-fight is never in front of the party
+  before you have looked at it. Untick and it goes home to the category it came
+  from. Dropping a record on the **Player** tab does the same thing.
+- **A one-press damage button beside HP, on the Player tab.** It applies
   whatever signed number is in that record's **AC** field: put `-5` there and
   every press takes five off. The sign is required, so a plain `18` leaves the
   button greyed out — which is also what an ordinary armour class does.
-- **Chosen**, in the DM view, pinned at the top and not removable. It mirrors
-  your map selection: select a token and its record appears there, deselect and
-  it goes back. It is the same record either way — editing it in Chosen edits
-  the real thing, not a copy.
-- **Categories, made by anyone.** The folder button adds one. Rename it in
-  place, drag records into it, and hide the whole thing with the eye. Records
-  not filed anywhere sit in an **Ungrouped** section. Every section collapses
-  from the chevron by its heading. Dragging is the only way to file a record — it is faster than a dropdown and you can see where
-  it lands.
+- **Chosen** is the one tab that borrows rather than owns. It mirrors your map
+  selection: select a token and its record appears there, deselect and it goes
+  back, and the record still lives in its own tab as well. It is the same
+  record either way — editing it in Chosen edits the real thing, not a copy.
+- **Categories, made by anyone.** The folder button adds one and opens it.
+  Under the strip, the open category gets one row of controls: rename it in
+  place, hide it from players with the eye, delete it with the ✕ (its records
+  fall back to Ungrouped). A hidden category shows a struck-through eye on its
+  tab, and players do not see the tab at all.
 - **A command bar for bulk entry**, on the terminal button. One line per record,
   name first, then any of these in any order:
 
@@ -206,9 +213,14 @@ src/ui/      the panel
 - **A button, not a field.** The amount is a property of the character that
   rarely changes, so it is set once where the other numbers live and then
   applied with one click for the rest of the fight.
-- **The player view has no drag.** With the sections gone there is nothing to
-  drag between, and reordering a filtered list would shuffle records the player
-  cannot see.
+- **Dragging inside Player or Chosen never refiles.** Those two tabs mix
+  records from several categories, so taking the drop target's category would
+  silently move the dragged record somewhere else; there, a drag reorders and
+  nothing more.
+- **The dragged row floats above the panel rather than moving in place.** The
+  list scrolls and the tabs sit above it, so a row dragged up to a tab would be
+  clipped at the edge of its own container — which is precisely the drag that
+  now matters most.
 - **Only HP is editable in the row.** Every other value is edit-on-expand. The
   list is what you touch mid-combat, and the cost of a slip there should be a
   number you can retype, not an identity you have to reconstruct.
@@ -289,8 +301,9 @@ src/ui/      the panel
   `src/core/records.ts`; category names at 24 —
   `CATEGORY_NAME_MAX_LENGTH` in `src/core/categories.ts`.
 - New categories start hidden — `newCategory` in `src/core/categories.ts`.
-- New records start on the DM tab — `isPlayer` in `newRecord`,
-  `src/core/records.ts`.
+- New records start with the GM, and otherwise follow the open tab —
+  `isPlayer` in `newRecord`, `src/core/records.ts`, and `tabDefaults` in
+  `src/ui/App.tsx`.
 - Condition and resource names cap at 24 characters —
   `ENTRY_NAME_MAX_LENGTH` in `src/core/entries.ts`.
 - Four condition circles per token — `MAX_CONDITION_BUBBLES` in

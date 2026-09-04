@@ -12,13 +12,14 @@ import {
   type CollisionDetection,
   DndContext,
   type DragEndEvent,
+  DragOverlay,
+  type DragStartEvent,
   PointerSensor,
   closestCenter,
   pointerWithin,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { restrictToFirstScrollableAncestor } from "@dnd-kit/modifiers";
 import {
   SortableContext,
   verticalListSortingStrategy,
@@ -55,24 +56,24 @@ import type {
   NumericStatKey,
   TrackedRecord,
 } from "@/core/types";
+import CategoryBar from "./CategoryBar";
 import CommandBar from "./CommandBar";
-import CategorySection, {
-  categoryFromDroppableId,
-} from "./CategorySection";
 import RecordDetails from "./RecordDetails";
 import RecordRow from "./RecordRow";
 import RoundBar from "./RoundBar";
-import ViewTabs, { type View } from "./ViewTabs";
+import TabStrip, {
+  CHOSEN_TAB,
+  PLAYER_TAB,
+  UNGROUPED_TAB,
+  type TabDef,
+  tabFromDroppableId,
+} from "./TabStrip";
 
 /**
  * Popover width. Fixed now that details open inline rather than beside the
  * list, so this only has to agree with `action.width` in manifest.json.
  */
 const PANEL_WIDTH = 288;
-
-/** Collapse keys for the two sections that are not real categories. */
-const CHOSEN_ID = "chosen";
-const UNGROUPED_ID = "ungrouped";
 
 export default function App() {
   const [state, setState] = useState<TrackerState>(EMPTY_STATE);
@@ -84,12 +85,13 @@ export default function App() {
   const [commandOpen, setCommandOpen] = useState(false);
   /** Per-person working set. Never written to the room. */
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
-  const [view, setView] = useState<View>("PLAYER");
-  const viewChosen = useRef(false);
-  const chooseView = useCallback((next: View) => {
-    viewChosen.current = true;
-    setView(next);
+  const [activeTab, setActiveTab] = useState<string>(PLAYER_TAB);
+  /** The record under the pointer mid-drag, for the floating preview. */
+  const [dragging, setDragging] = useState<string | null>(null);
+  const tabPicked = useRef(false);
+  const pickTab = useCallback((next: string) => {
+    tabPicked.current = true;
+    setActiveTab(next);
   }, []);
 
   // Scene tokens — only for linking, thumbnails and names.
@@ -142,7 +144,9 @@ export default function App() {
       setIsGm(role === "GM");
       // The role picks the opening tab and then stops mattering — switching is
       // free, so this must not fight the person after they have chosen.
-      if (!viewChosen.current) setView(role === "GM" ? "DM" : "PLAYER");
+      if (!tabPicked.current) {
+        setActiveTab(role === "GM" ? UNGROUPED_TAB : PLAYER_TAB);
+      }
     });
     return OBR.player.onChange((player) => {
       setSelection(player.selection ?? []);
@@ -161,7 +165,7 @@ export default function App() {
   /**
    * Optimistic write.
    *
-   * The panel shows the change at once, then the scene write goes out built
+   * The panel shows the change at once, then the room write goes out built
    * from the live metadata rather than this local copy — so two people editing
    * different records do not overwrite each other.
    */
@@ -188,22 +192,47 @@ export default function App() {
     [edit],
   );
 
+  /**
+   * What the open tab means for a record made while it is open.
+   *
+   * New records land where you are looking. Typing eight goblins into the
+   * command bar on the Undead tab and finding them somewhere else would be a
+   * small betrayal every time.
+   */
+  const tabDefaults = useCallback(
+    (categories: CategoryDef[]) => {
+      if (activeTab === PLAYER_TAB) return { categoryId: null, isPlayer: true };
+      const filed = categories.some((category) => category.id === activeTab);
+      return { categoryId: filed ? activeTab : null, isPlayer: false };
+    },
+    [activeTab],
+  );
+
   const addRecord = useCallback(() => {
+    // The id is needed to open the panel, so the record is built here rather
+    // than inside the mutate closure.
     const record = newRecord();
-    editRecords((current) => [...current, record]);
+    edit((current) => ({
+      ...current,
+      records: [
+        ...current.records,
+        { ...record, ...tabDefaults(current.categories) },
+      ],
+    }));
     // Open it straight away: a new record has no name yet, and naming it is the
     // first thing anyone wants to do.
     setExpandedId(record.id);
-  }, [editRecords]);
+  }, [edit, tabDefaults]);
 
   /**
    * Bulk entry from the command bar.
    *
    * Categories named in the input are matched case-insensitively and created if
    * missing — hidden, like any new category, so a wave typed in mid-session
-   * does not appear on the players' panel the moment it exists. Records and
-   * categories go in one write so a new group can never arrive without the
-   * records that asked for it.
+   * does not appear on the players' panel the moment it exists. Anything
+   * without a `#group` follows the open tab. Records and categories go in one
+   * write so a new group can never arrive without the records that asked for
+   * it.
    */
   const addFromCommand = useCallback(
     (specs: RecordSpec[]) => {
@@ -213,10 +242,12 @@ export default function App() {
         const byName = new Map(
           categories.map((category) => [category.name.toLowerCase(), category]),
         );
+        const fallback = tabDefaults(current.categories);
 
         const records = [...current.records];
         for (const spec of specs) {
-          let categoryId: string | null = null;
+          let categoryId = fallback.categoryId;
+          let isPlayer = fallback.isPlayer;
           if (spec.group !== null) {
             const key = spec.group.toLowerCase();
             let category = byName.get(key);
@@ -225,7 +256,9 @@ export default function App() {
               categories.push(category);
               byName.set(key, category);
             }
+            // A named group is an instruction; it overrides the open tab.
             categoryId = category.id;
+            isPlayer = false;
           }
           records.push({
             ...newRecord(spec.name),
@@ -233,30 +266,37 @@ export default function App() {
             maxHp: spec.maxHp,
             ac: spec.ac,
             categoryId,
+            isPlayer,
           });
         }
 
         return { ...current, records, categories };
       });
     },
-    [edit],
+    [edit, tabDefaults],
   );
 
+  /** A new category is somewhere you want to be, so it opens. */
   const addCategory = useCallback(() => {
-    editCategories((current) => [...current, newCategory()]);
-  }, [editCategories]);
+    const category = newCategory();
+    editCategories((current) => [...current, category]);
+    pickTab(category.id);
+  }, [editCategories, pickTab]);
 
   /** Deleting a category unfiles its records rather than taking them with it. */
   const deleteCategory = useCallback(
-    (id: string) =>
+    (id: string) => {
       edit((current) => ({
         ...current,
         categories: withoutCategory(current.categories, id),
         records: current.records.map((record) =>
           record.categoryId === id ? { ...record, categoryId: null } : record,
         ),
-      })),
-    [edit],
+      }));
+      // Follow the records out rather than leaving the person on a dead tab.
+      pickTab(UNGROUPED_TAB);
+    },
+    [edit, pickTab],
   );
 
   const handleStatChange = useCallback(
@@ -292,17 +332,15 @@ export default function App() {
   /**
    * Hands a record to the players, or takes it back.
    *
-   * The two tabs are a partition, not a filter with an overlap: a ticked record
-   * leaves the DM tab as it arrives on the Player one. That is the point — the
-   * GM's tab stays the list of things the table is not looking at.
+   * The tick and the tabs say the same thing: a record sits in exactly one tab.
+   * Its `categoryId` is left alone underneath, so unticking sends it home to
+   * the category it came from rather than dumping it in Ungrouped.
    */
   const handleTogglePlayer = useCallback(
     (id: string) =>
       editRecords((current) =>
         current.map((record) =>
-          record.id === id
-            ? { ...record, isPlayer: !record.isPlayer }
-            : record,
+          record.id === id ? { ...record, isPlayer: !record.isPlayer } : record,
         ),
       ),
     [editRecords],
@@ -375,27 +413,20 @@ export default function App() {
 
     const previous = fromTokens.current;
     const unchanged =
-      previous.size === derived.size && [...derived].every((id) => previous.has(id));
+      previous.size === derived.size &&
+      [...derived].every((id) => previous.has(id));
     if (unchanged) return;
 
     fromTokens.current = derived;
     setChosen(derived);
   }, [selection, state.records]);
 
-  const toggleCollapsed = useCallback((key: string) => {
-    setCollapsed((current) => {
-      const next = new Set(current);
-      if (!next.delete(key)) next.add(key);
-      return next;
-    });
-  }, []);
-
   /**
    * What this person is allowed to see.
    *
-   * The GM sees every category. Everyone else sees the ungrouped list plus any
-   * category not marked hidden — and a record filed under a category that has
-   * since been deleted falls back to ungrouped rather than vanishing.
+   * The GM sees every category. Everyone else sees any category not marked
+   * hidden — and a record filed under a category that has since been deleted
+   * falls back to Ungrouped rather than vanishing.
    */
   const visibleCategories = useMemo(
     () =>
@@ -405,46 +436,77 @@ export default function App() {
     [isGm, state.categories],
   );
 
-  const groups = useMemo(() => {
+  const tabs = useMemo<TabDef[]>(
+    () => [
+      { id: PLAYER_TAB, label: "Player", kind: "player", hidden: false },
+      { id: CHOSEN_TAB, label: "Chosen", kind: "chosen", hidden: false },
+      {
+        id: UNGROUPED_TAB,
+        label: "Ungrouped",
+        kind: "ungrouped",
+        hidden: false,
+      },
+      ...visibleCategories.map<TabDef>((category) => ({
+        id: category.id,
+        label: category.name,
+        kind: "category",
+        hidden: category.hidden,
+      })),
+    ],
+    [visibleCategories],
+  );
+
+  // A category that is deleted, or hidden out from under a player, must not
+  // leave them staring at a tab that no longer exists.
+  useEffect(() => {
+    if (!tabs.some((tab) => tab.id === activeTab)) setActiveTab(UNGROUPED_TAB);
+  }, [activeTab, tabs]);
+
+  const activeCategory = useMemo(
+    () => state.categories.find((category) => category.id === activeTab),
+    [activeTab, state.categories],
+  );
+
+  /**
+   * The one list on screen.
+   *
+   * Chosen is the exception to "a record sits in exactly one tab": it is a
+   * window onto the map selection, so a record shows there *as well as* in the
+   * tab it lives in. A hidden category still hides its records from Chosen —
+   * otherwise a player could pull one out of a category they cannot see.
+   */
+  const shown = useMemo(() => {
     const known = new Set(state.categories.map((category) => category.id));
     const allowed = new Set(visibleCategories.map((category) => category.id));
-
-    const picked: TrackedRecord[] = [];
-    const ungrouped: TrackedRecord[] = [];
-    const byCategory = new Map<string, TrackedRecord[]>();
-    for (const category of visibleCategories) byCategory.set(category.id, []);
-
-    for (const record of state.records) {
-      // Ticked records belong to the other tab entirely.
-      if (record.isPlayer) continue;
-
+    const permitted = (record: TrackedRecord) => {
       const id = record.categoryId;
-      const filed = id !== null && known.has(id);
-      // A hidden category hides its records even from Chosen — otherwise a
-      // player could pull one out of a category they cannot see.
-      if (filed && !allowed.has(id)) continue;
+      if (id === null || !known.has(id)) return true;
+      return allowed.has(id);
+    };
 
-      if (chosen.has(record.id)) {
-        picked.push(record);
-        continue;
-      }
-      if (!filed) {
-        ungrouped.push(record);
-        continue;
-      }
-      byCategory.get(id)?.push(record);
+    switch (activeTab) {
+      case PLAYER_TAB:
+        return state.records.filter(
+          (record) => record.isPlayer && permitted(record),
+        );
+      case CHOSEN_TAB:
+        return state.records.filter(
+          (record) => chosen.has(record.id) && permitted(record),
+        );
+      case UNGROUPED_TAB:
+        return state.records.filter(
+          (record) =>
+            !record.isPlayer &&
+            (record.categoryId === null || !known.has(record.categoryId)),
+        );
+      default:
+        return allowed.has(activeTab)
+          ? state.records.filter(
+              (record) => !record.isPlayer && record.categoryId === activeTab,
+            )
+          : [];
     }
-
-    return { picked, ungrouped, byCategory };
-  }, [chosen, state.categories, state.records, visibleCategories]);
-
-  const visibleCount =
-    groups.picked.length +
-    groups.ungrouped.length +
-    [...groups.byCategory.values()].reduce(
-      (total, list) => total + list.length,
-      0,
-    );
+  }, [activeTab, chosen, state.categories, state.records, visibleCategories]);
 
   // A record deleted from under an open panel must not leave it open.
   useEffect(() => {
@@ -464,16 +526,16 @@ export default function App() {
   }, []);
 
   /**
-   * Rows beat sections.
+   * Rows beat tabs.
    *
-   * A category section is a large droppable, so plain closestCenter will often
-   * pick it over the row the pointer is actually on and every drop would land
-   * at the end of the list.
+   * The strip sits directly above the list, so a drag that ends over a row is
+   * always read as a reorder; only a drop genuinely on the strip files the
+   * record somewhere else.
    */
   const collisionDetection = useCallback<CollisionDetection>((args) => {
     const under = pointerWithin(args);
     const rows = under.filter(
-      (collision) => !String(collision.id).startsWith("category:"),
+      (collision) => !String(collision.id).startsWith("tab:"),
     );
     if (rows.length > 0) return rows;
     if (under.length > 0) return under;
@@ -487,8 +549,13 @@ export default function App() {
     }),
   );
 
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setDragging(String(event.active.id));
+  }, []);
+
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
+      setDragging(null);
       const { active, over } = event;
       if (over === null) return;
 
@@ -496,43 +563,44 @@ export default function App() {
       const overId = String(over.id);
       if (activeId === overId) return;
 
-      const asSection = categoryFromDroppableId(overId);
-      if (asSection === CHOSEN_ID) return;
-      if (asSection !== undefined) {
+      // Dropped on a tab: the record moves there.
+      const asTab = tabFromDroppableId(overId);
+      if (asTab !== undefined) {
+        // Chosen mirrors the map selection; there is nothing to file into it.
+        if (asTab === CHOSEN_TAB) return;
+        if (asTab === PLAYER_TAB) {
+          editRecords((current) =>
+            withRecord(current, activeId, { isPlayer: true }),
+          );
+          return;
+        }
+        const categoryId = asTab === UNGROUPED_TAB ? null : asTab;
         editRecords((current) =>
-          moveRecordInto(current, activeId, asSection, null),
+          withRecord(
+            moveRecordInto(current, activeId, categoryId, null),
+            activeId,
+            { isPlayer: false },
+          ),
         );
         return;
       }
 
+      // Dropped on a row: reorder.
       const target = state.records.find((record) => record.id === overId);
       if (target === undefined) return;
+      // Player and Chosen mix records from several categories, so taking the
+      // target's category here would silently refile the one being dragged.
+      const mixed = activeTab === PLAYER_TAB || activeTab === CHOSEN_TAB;
+      const moving = state.records.find((record) => record.id === activeId);
+      const categoryId = mixed
+        ? (moving?.categoryId ?? null)
+        : target.categoryId;
       editRecords((current) =>
-        moveRecordInto(current, activeId, target.categoryId, overId),
+        moveRecordInto(current, activeId, categoryId, overId),
       );
     },
-    [editRecords, state.records],
+    [activeTab, editRecords, state.records],
   );
-
-  /**
-   * The ticked records, flat and in list order.
-   *
-   * The player view has no categories at all — the grouping is the GM's filing
-   * system, not something a player should have to navigate mid-fight — so the
-   * hidden ones are filtered out and the rest run together. Category visibility
-   * still applies on top of the tick: a record ticked into a hidden category is
-   * hidden, because the category is the stronger statement of the two.
-   */
-  const flatRecords = useMemo(() => {
-    const known = new Set(state.categories.map((category) => category.id));
-    const allowed = new Set(visibleCategories.map((category) => category.id));
-    return state.records.filter((record) => {
-      if (!record.isPlayer) return false;
-      const id = record.categoryId;
-      if (id === null || !known.has(id)) return true;
-      return allowed.has(id);
-    });
-  }, [state.categories, state.records, visibleCategories]);
 
   /** Linking needs exactly one token selected; two is ambiguous. */
   const selectedToken = useMemo(() => {
@@ -540,48 +608,35 @@ export default function App() {
     return tokens.get(selection[0] ?? "");
   }, [selection, tokens]);
 
-  const renderRows = (records: TrackedRecord[], adjustable = false) => (
-    <SortableContext
-      items={records.map((record) => record.id)}
-      strategy={verticalListSortingStrategy}
-    >
-      {records.map((record) => {
-        const token =
-          record.tokenId === null ? undefined : tokens.get(record.tokenId);
-        return (
-          <Fragment key={record.id}>
-            <RecordRow
-              record={record}
-              token={token}
-              selectedToken={selectedToken}
-              selected={
-                record.tokenId !== null && selection.includes(record.tokenId)
-              }
-              expanded={expandedId === record.id}
-              showAdjust={adjustable}
-              onStatChange={handleStatChange}
-              onToggleExpanded={toggleExpanded}
-              onAssign={handleAssign}
-            />
-            {expandedId === record.id && (
-              <RecordDetails
-                record={record}
-                token={token}
-                onStatChange={handleStatChange}
-                onAcChange={handleAcChange}
-                onNameChange={handleNameChange}
-                onNoteChange={handleNoteChange}
-                onConditionsChange={handleConditionsChange}
-                onAssign={handleAssign}
-                onTogglePlayer={handleTogglePlayer}
-                onDelete={handleDelete}
-              />
-            )}
-          </Fragment>
-        );
-      })}
-    </SortableContext>
+  const draggedRecord = useMemo(
+    () =>
+      dragging === null
+        ? undefined
+        : state.records.find((record) => record.id === dragging),
+    [dragging, state.records],
   );
+
+  const emptyMessage: ReactNode = useMemo(() => {
+    switch (activeTab) {
+      case PLAYER_TAB:
+        return (
+          <>
+            Nothing here yet. Tick <strong>Player</strong> at the bottom of a
+            record, or drag one onto this tab.
+          </>
+        );
+      case CHOSEN_TAB:
+        return "Select a token on the map.";
+      case UNGROUPED_TAB:
+        return (
+          <>
+            Add a record with <strong>+</strong>, then link a token to it.
+          </>
+        );
+      default:
+        return "Empty. Drag a record onto this tab to file it here.";
+    }
+  }, [activeTab]);
 
   return (
     <div className="app-surface flex h-full overflow-hidden">
@@ -589,118 +644,118 @@ export default function App() {
         className="flex h-full shrink-0 flex-col"
         style={{ width: PANEL_WIDTH }}
       >
-        <RoundBar
-          round={state.round}
-          onStep={stepRound}
-          canStepBack={state.round > FIRST_ROUND}
-          onAddRecord={addRecord}
-          onAddCategory={addCategory}
-          onToggleCommand={() => setCommandOpen((open) => !open)}
-          commandOpen={commandOpen}
-        />
-
-        <ViewTabs view={view} onChange={chooseView} />
-
-        {commandOpen && (
-          <CommandBar
-            onSubmit={addFromCommand}
-            onClose={() => setCommandOpen(false)}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={collisionDetection}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => setDragging(null)}
+        >
+          <RoundBar
+            round={state.round}
+            onStep={stepRound}
+            canStepBack={state.round > FIRST_ROUND}
+            onAddRecord={addRecord}
+            onAddCategory={addCategory}
+            onToggleCommand={() => setCommandOpen((open) => !open)}
+            commandOpen={commandOpen}
           />
-        )}
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">
-          {view === "PLAYER" ? (
-            flatRecords.length === 0 ? (
-              <Placeholder>
-                Nothing here yet. Tick <strong>Player</strong> at the bottom of
-                a record to move it to this tab.
-              </Placeholder>
-            ) : (
-              // No DndContext: with the sections gone there is nothing to drag
-              // between, and reordering a filtered list would shuffle records
-              // the player cannot see.
-              renderRows(flatRecords, true)
-            )
-          ) : visibleCount === 0 && visibleCategories.length === 0 ? (
-            <Placeholder>
-              Add a record with <strong>+</strong>, then link a token to it.
-            </Placeholder>
-          ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={collisionDetection}
-              modifiers={[restrictToFirstScrollableAncestor]}
-              onDragEnd={handleDragEnd}
-            >
-              {/* Always present — it is the working set, and an empty one
-                  still has to say what puts something in it. */}
-              <CategorySection
-                categoryId={CHOSEN_ID}
-                name="Chosen"
-                hidden={false}
-                count={groups.picked.length}
-                editable={false}
-                accent
-                collapsed={collapsed.has(CHOSEN_ID)}
-                onToggleCollapsed={() => toggleCollapsed(CHOSEN_ID)}
-                emptyHint="Select a token on the map."
-                onRename={() => {}}
-                onToggleHidden={() => {}}
-                onDelete={() => {}}
-              >
-                {renderRows(groups.picked)}
-              </CategorySection>
+          <TabStrip tabs={tabs} active={activeTab} onSelect={pickTab} />
 
-              {groups.ungrouped.length > 0 && (
-                <CategorySection
-                  categoryId={null}
-                  name="Ungrouped"
-                  hidden={false}
-                  count={groups.ungrouped.length}
-                  editable={false}
-                  collapsed={collapsed.has(UNGROUPED_ID)}
-                  onToggleCollapsed={() => toggleCollapsed(UNGROUPED_ID)}
-                  onRename={() => {}}
-                  onToggleHidden={() => {}}
-                  onDelete={() => {}}
-                >
-                  {renderRows(groups.ungrouped)}
-                </CategorySection>
-              )}
-
-              {visibleCategories.map((category) => {
-                const records = groups.byCategory.get(category.id) ?? [];
-                return (
-                  <CategorySection
-                    key={category.id}
-                    categoryId={category.id}
-                    name={category.name}
-                    hidden={category.hidden}
-                    count={records.length}
-                    editable
-                    collapsed={collapsed.has(category.id)}
-                    onToggleCollapsed={() => toggleCollapsed(category.id)}
-                    onRename={(name) =>
-                      editCategories((current) =>
-                        withCategory(current, category.id, { name }),
-                      )
-                    }
-                    onToggleHidden={() =>
-                      editCategories((current) =>
-                        withCategory(current, category.id, {
-                          hidden: !category.hidden,
-                        }),
-                      )
-                    }
-                    onDelete={() => deleteCategory(category.id)}
-                  >
-                    {renderRows(records)}
-                  </CategorySection>
-                );
-              })}
-            </DndContext>
+          {activeCategory !== undefined && (
+            <CategoryBar
+              name={activeCategory.name}
+              hidden={activeCategory.hidden}
+              onRename={(name) =>
+                editCategories((current) =>
+                  withCategory(current, activeCategory.id, { name }),
+                )
+              }
+              onToggleHidden={() =>
+                editCategories((current) =>
+                  withCategory(current, activeCategory.id, {
+                    hidden: !activeCategory.hidden,
+                  }),
+                )
+              }
+              onDelete={() => deleteCategory(activeCategory.id)}
+            />
           )}
-        </main>
+
+          {commandOpen && (
+            <CommandBar
+              onSubmit={addFromCommand}
+              onClose={() => setCommandOpen(false)}
+            />
+          )}
+
+          <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">
+            {shown.length === 0 ? (
+              <Placeholder>{emptyMessage}</Placeholder>
+            ) : (
+              <SortableContext
+                items={shown.map((record) => record.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {shown.map((record) => {
+                  const token =
+                    record.tokenId === null
+                      ? undefined
+                      : tokens.get(record.tokenId);
+                  return (
+                    <Fragment key={record.id}>
+                      <RecordRow
+                        record={record}
+                        token={token}
+                        selectedToken={selectedToken}
+                        selected={
+                          record.tokenId !== null &&
+                          selection.includes(record.tokenId)
+                        }
+                        expanded={expandedId === record.id}
+                        showAdjust={activeTab === PLAYER_TAB}
+                        onStatChange={handleStatChange}
+                        onToggleExpanded={toggleExpanded}
+                        onAssign={handleAssign}
+                      />
+                      {expandedId === record.id && (
+                        <RecordDetails
+                          record={record}
+                          token={token}
+                          onStatChange={handleStatChange}
+                          onAcChange={handleAcChange}
+                          onNameChange={handleNameChange}
+                          onNoteChange={handleNoteChange}
+                          onConditionsChange={handleConditionsChange}
+                          onAssign={handleAssign}
+                          onTogglePlayer={handleTogglePlayer}
+                          onDelete={handleDelete}
+                        />
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </SortableContext>
+            )}
+          </main>
+
+          {/* A floating copy, portalled out of the scrolling list. Without it
+              the row is clipped the moment it is dragged up over the tabs —
+              which is now the whole point of dragging one. */}
+          <DragOverlay dropAnimation={null}>
+            {draggedRecord === undefined ? null : (
+              <DragPreview
+                record={draggedRecord}
+                token={
+                  draggedRecord.tokenId === null
+                    ? undefined
+                    : tokens.get(draggedRecord.tokenId)
+                }
+              />
+            )}
+          </DragOverlay>
+        </DndContext>
 
         {/* Which build is actually running. The quickest way to tell a stale
             deploy from a real bug. */}
@@ -708,6 +763,34 @@ export default function App() {
           v{__APP_VERSION__}
         </footer>
       </div>
+    </div>
+  );
+}
+
+/** What you are holding, while you are holding it. */
+function DragPreview({
+  record,
+  token,
+}: {
+  record: TrackedRecord;
+  token: AssignableToken | undefined;
+}) {
+  return (
+    <div className="flex items-center gap-1 rounded-lg bg-white px-1 py-1 shadow-lg ring-1 ring-ink-300 dark:bg-ink-900 dark:ring-ink-700">
+      {token !== undefined ? (
+        <img
+          src={token.imageUrl}
+          alt=""
+          draggable={false}
+          className="drag-none size-7 shrink-0 rounded object-contain"
+        />
+      ) : (
+        <span className="size-7 shrink-0 rounded border border-dashed border-ink-300 dark:border-ink-700" />
+      )}
+      <span className="min-w-0 flex-1 truncate px-1 text-sm">
+        {record.name || token?.name || "Unnamed"}
+      </span>
+      <span className="shrink-0 px-1 text-sm tabular-nums">{record.hp}</span>
     </div>
   );
 }
