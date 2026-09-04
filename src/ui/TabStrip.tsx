@@ -1,15 +1,13 @@
-import { useEffect, useRef } from "react";
 import { useDroppable } from "@dnd-kit/core";
 
-/** The three tabs that are not categories. */
+/** The two tabs that are not categories. */
 export const PLAYER_TAB = "player";
-export const CHOSEN_TAB = "chosen";
 export const UNGROUPED_TAB = "ungrouped";
 
-export type TabKind = "player" | "chosen" | "ungrouped" | "category";
+export type TabKind = "player" | "ungrouped" | "category";
 
 export type TabDef = {
-  /** A category id, or one of the three constants above. */
+  /** A category id, or one of the two constants above. */
   id: string;
   label: string;
   kind: TabKind;
@@ -30,24 +28,27 @@ type Props = {
 };
 
 /**
- * One row of tabs, one list at a time.
+ * The groups, three to a row.
  *
  * This replaced a stack of collapsible sections. With a dozen categories the
  * stack was mostly headings, and finding a record meant scrolling past groups
- * you were not using; a tab strip shows one group at full height and costs one
- * row of chrome no matter how many there are.
+ * you were not using; tabs show one group at full height.
+ *
+ * A fixed three-column grid rather than a scrolling row: in a 288px panel a
+ * scrolling strip hides tabs off the end, and a tab you cannot see is no use
+ * as a drop target. Wrapping costs a little height and keeps every group one
+ * click away.
  *
  * Every tab is also a drop target, which is what keeps filing by drag alive
  * now that only one category is on screen: pick a record up, drop it on a tab,
- * and it moves there. Chosen is the exception — it mirrors the map selection,
- * so there is nothing to drop into it.
+ * and it moves there.
  */
 export default function TabStrip({ tabs, active, onSelect }: Props) {
   return (
     <div
       role="tablist"
       aria-label="Groups"
-      className="no-scrollbar flex shrink-0 gap-1 overflow-x-auto border-b border-ink-200 px-2 pb-1.5 dark:border-ink-800"
+      className="grid shrink-0 grid-cols-3 gap-1 border-b border-ink-200 px-2 pb-1.5 dark:border-ink-800"
     >
       {tabs.map((tab) => (
         <Tab
@@ -70,28 +71,11 @@ function Tab({
   active: boolean;
   onSelect: () => void;
 }) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: tabDroppableId(tab.id),
-    disabled: tab.kind === "chosen",
-  });
-
-  // A tab off the end of the strip is no use as a drop target or as a place to
-  // put you back after a rename, so the selected one scrolls itself in.
-  const button = useRef<HTMLButtonElement | null>(null);
-  useEffect(() => {
-    if (active) {
-      button.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
-    }
-  }, [active]);
-
-  const accent = tab.kind === "chosen";
+  const { setNodeRef, isOver } = useDroppable({ id: tabDroppableId(tab.id) });
 
   return (
     <button
-      ref={(node: HTMLButtonElement | null) => {
-        button.current = node;
-        setNodeRef(node);
-      }}
+      ref={setNodeRef}
       type="button"
       role="tab"
       aria-selected={active}
@@ -102,17 +86,12 @@ function Tab({
       }
       onClick={onSelect}
       className={[
-        "flex shrink-0 items-center gap-1 rounded-md px-2 py-1",
+        "flex min-w-0 items-center justify-center gap-1 rounded-md px-1.5 py-1",
         "text-[11px] font-semibold uppercase tracking-wider transition-colors",
-        "max-w-[8rem]",
         isOver ? "ring-2 ring-ink-400 dark:ring-ink-500" : "",
         active
-          ? accent
-            ? "bg-amber-200 text-amber-900 dark:bg-amber-900/60 dark:text-amber-100"
-            : "bg-ink-200 text-ink-900 dark:bg-ink-800 dark:text-ink-50"
-          : accent
-            ? "text-amber-700 hover:bg-amber-100 dark:text-amber-500 dark:hover:bg-amber-950/40"
-            : "text-ink-400 hover:bg-ink-100 hover:text-ink-700 dark:text-ink-600 dark:hover:bg-ink-900 dark:hover:text-ink-300",
+          ? "bg-ink-200 text-ink-900 dark:bg-ink-800 dark:text-ink-50"
+          : "text-ink-400 hover:bg-ink-100 hover:text-ink-700 dark:text-ink-600 dark:hover:bg-ink-900 dark:hover:text-ink-300",
       ].join(" ")}
     >
       {tab.kind === "category" && tab.hidden && (

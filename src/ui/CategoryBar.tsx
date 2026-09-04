@@ -1,9 +1,11 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { CATEGORY_NAME_MAX_LENGTH } from "@/core/categories";
 
 type Props = {
   name: string;
   hidden: boolean;
+  /** How many records go with it, for the delete confirmation. */
+  count: number;
   onRename: (next: string) => void;
   onToggleHidden: () => void;
   onDelete: () => void;
@@ -20,6 +22,7 @@ type Props = {
 export default function CategoryBar({
   name,
   hidden,
+  count,
   onRename,
   onToggleHidden,
   onDelete,
@@ -51,14 +54,72 @@ export default function CategoryBar({
         )}
       </IconButton>
 
-      <IconButton
-        label="Delete category — its records move to Ungrouped"
-        onClick={onDelete}
-        danger
-      >
-        <path d="M18 6 6 18M6 6l12 12" />
-      </IconButton>
+      <DeleteButton count={count} onDelete={onDelete} />
     </div>
+  );
+}
+
+/**
+ * Delete, on two clicks.
+ *
+ * Deleting a category now takes its records with it, which is a lot to lose to
+ * one mis-click on a 20px target. The first click arms it and says how many are
+ * going; the second does it. It disarms itself after a few seconds so it is
+ * never left cocked.
+ */
+function DeleteButton({
+  count,
+  onDelete,
+}: {
+  count: number;
+  onDelete: () => void;
+}) {
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    if (!armed) return;
+    const timer = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(timer);
+  }, [armed]);
+
+  if (armed) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setArmed(false);
+          onDelete();
+        }}
+        onBlur={() => setArmed(false)}
+        title={
+          count === 0
+            ? "Click to delete this category"
+            : `Click to delete this category and its ${count} record${count === 1 ? "" : "s"}`
+        }
+        className={[
+          "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase",
+          "tracking-wider transition-colors",
+          "bg-red-600 text-white hover:bg-red-700",
+          "dark:bg-red-700 dark:hover:bg-red-600",
+        ].join(" ")}
+      >
+        Delete {count > 0 && count}
+      </button>
+    );
+  }
+
+  return (
+    <IconButton
+      label={
+        count === 0
+          ? "Delete category"
+          : `Delete category and its ${count} record${count === 1 ? "" : "s"}`
+      }
+      onClick={() => setArmed(true)}
+      danger
+    >
+      <path d="M18 6 6 18M6 6l12 12" />
+    </IconButton>
   );
 }
 

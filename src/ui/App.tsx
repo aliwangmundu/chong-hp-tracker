@@ -62,7 +62,6 @@ import RecordDetails from "./RecordDetails";
 import RecordRow from "./RecordRow";
 import RoundBar from "./RoundBar";
 import TabStrip, {
-  CHOSEN_TAB,
   PLAYER_TAB,
   UNGROUPED_TAB,
   type TabDef,
@@ -283,17 +282,21 @@ export default function App() {
     pickTab(category.id);
   }, [editCategories, pickTab]);
 
-  /** Deleting a category unfiles its records rather than taking them with it. */
+  /**
+   * Deleting a category deletes what is in it.
+   *
+   * A category is a wave of monsters, and when the wave is done the whole thing
+   * goes. The alternative — tipping fifteen goblins into Ungrouped — made
+   * clearing one group into a tidying job. The button that calls this arms
+   * itself first and says how many are going, because this is not undoable.
+   */
   const deleteCategory = useCallback(
     (id: string) => {
       edit((current) => ({
         ...current,
         categories: withoutCategory(current.categories, id),
-        records: current.records.map((record) =>
-          record.categoryId === id ? { ...record, categoryId: null } : record,
-        ),
+        records: current.records.filter((record) => record.categoryId !== id),
       }));
-      // Follow the records out rather than leaving the person on a dead tab.
       pickTab(UNGROUPED_TAB);
     },
     [edit, pickTab],
@@ -398,9 +401,9 @@ export default function App() {
   );
 
   /**
-   * Selecting a token on the map puts its record in Chosen; deselecting takes
-   * it out again. That is the only way in or out — Chosen is a mirror of the
-   * map selection, not a second thing to keep in step by hand.
+   * Selecting a token on the map lifts its record to the top of the panel;
+   * deselecting drops it back. That is the only way in or out — this is a
+   * mirror of the map selection, not a second thing to keep in step by hand.
    */
   const fromTokens = useRef<ReadonlySet<string>>(new Set());
   useEffect(() => {
@@ -439,7 +442,6 @@ export default function App() {
   const tabs = useMemo<TabDef[]>(
     () => [
       { id: PLAYER_TAB, label: "Player", kind: "player", hidden: false },
-      { id: CHOSEN_TAB, label: "Chosen", kind: "chosen", hidden: false },
       {
         id: UNGROUPED_TAB,
         label: "Ungrouped",
@@ -468,45 +470,74 @@ export default function App() {
   );
 
   /**
-   * The one list on screen.
+   * What is selected on the map, above the list, on every tab.
    *
-   * Chosen is the exception to "a record sits in exactly one tab": it is a
-   * window onto the map selection, so a record shows there *as well as* in the
-   * tab it lives in. A hidden category still hides its records from Chosen —
-   * otherwise a player could pull one out of a category they cannot see.
+   * This used to be a tab of its own called Chosen, which was exactly wrong:
+   * the whole point of the map selection is that it is what you are dealing
+   * with *now*, and putting it behind a tab meant leaving whichever group you
+   * were working in to reach it. It rides along instead — unlabelled and set
+   * apart by a hairline, because it explains itself the moment you click a
+   * token, and a heading over two rows is more furniture than it is worth.
+   *
+   * A hidden category still hides its records here — otherwise a player could
+   * pull one out of a category they cannot see.
+   */
+  const permitted = useCallback(
+    (record: TrackedRecord) => {
+      const id = record.categoryId;
+      if (id === null) return true;
+      if (!state.categories.some((category) => category.id === id)) return true;
+      return visibleCategories.some((category) => category.id === id);
+    },
+    [state.categories, visibleCategories],
+  );
+
+  const selected = useMemo(
+    () =>
+      state.records.filter(
+        (record) => chosen.has(record.id) && permitted(record),
+      ),
+    [chosen, permitted, state.records],
+  );
+
+  /**
+   * The tab's own list, minus anything already sitting in the strip above it.
+   *
+   * Showing a record twice on one screen would make every edit look like it had
+   * gone to the wrong copy.
    */
   const shown = useMemo(() => {
     const known = new Set(state.categories.map((category) => category.id));
     const allowed = new Set(visibleCategories.map((category) => category.id));
-    const permitted = (record: TrackedRecord) => {
-      const id = record.categoryId;
-      if (id === null || !known.has(id)) return true;
-      return allowed.has(id);
+
+    const inTab = (record: TrackedRecord) => {
+      if (chosen.has(record.id)) return false;
+      switch (activeTab) {
+        case PLAYER_TAB:
+          return record.isPlayer && permitted(record);
+        case UNGROUPED_TAB:
+          return (
+            !record.isPlayer &&
+            (record.categoryId === null || !known.has(record.categoryId))
+          );
+        default:
+          return (
+            !record.isPlayer &&
+            record.categoryId === activeTab &&
+            allowed.has(activeTab)
+          );
+      }
     };
 
-    switch (activeTab) {
-      case PLAYER_TAB:
-        return state.records.filter(
-          (record) => record.isPlayer && permitted(record),
-        );
-      case CHOSEN_TAB:
-        return state.records.filter(
-          (record) => chosen.has(record.id) && permitted(record),
-        );
-      case UNGROUPED_TAB:
-        return state.records.filter(
-          (record) =>
-            !record.isPlayer &&
-            (record.categoryId === null || !known.has(record.categoryId)),
-        );
-      default:
-        return allowed.has(activeTab)
-          ? state.records.filter(
-              (record) => !record.isPlayer && record.categoryId === activeTab,
-            )
-          : [];
-    }
-  }, [activeTab, chosen, state.categories, state.records, visibleCategories]);
+    return state.records.filter(inTab);
+  }, [
+    activeTab,
+    chosen,
+    permitted,
+    state.categories,
+    state.records,
+    visibleCategories,
+  ]);
 
   // A record deleted from under an open panel must not leave it open.
   useEffect(() => {
@@ -566,8 +597,6 @@ export default function App() {
       // Dropped on a tab: the record moves there.
       const asTab = tabFromDroppableId(overId);
       if (asTab !== undefined) {
-        // Chosen mirrors the map selection; there is nothing to file into it.
-        if (asTab === CHOSEN_TAB) return;
         if (asTab === PLAYER_TAB) {
           editRecords((current) =>
             withRecord(current, activeId, { isPlayer: true }),
@@ -588,9 +617,11 @@ export default function App() {
       // Dropped on a row: reorder.
       const target = state.records.find((record) => record.id === overId);
       if (target === undefined) return;
-      // Player and Chosen mix records from several categories, so taking the
-      // target's category here would silently refile the one being dragged.
-      const mixed = activeTab === PLAYER_TAB || activeTab === CHOSEN_TAB;
+      // The Player tab and the selection strip both mix records from several
+      // categories, so taking the target's category here would silently refile
+      // the one being dragged.
+      const mixed =
+        activeTab === PLAYER_TAB || chosen.has(activeId) || chosen.has(overId);
       const moving = state.records.find((record) => record.id === activeId);
       const categoryId = mixed
         ? (moving?.categoryId ?? null)
@@ -599,7 +630,7 @@ export default function App() {
         moveRecordInto(current, activeId, categoryId, overId),
       );
     },
-    [activeTab, editRecords, state.records],
+    [activeTab, chosen, editRecords, state.records],
   );
 
   /** Linking needs exactly one token selected; two is ambiguous. */
@@ -625,8 +656,6 @@ export default function App() {
             record, or drag one onto this tab.
           </>
         );
-      case CHOSEN_TAB:
-        return "Select a token on the map.";
       case UNGROUPED_TAB:
         return (
           <>
@@ -637,6 +666,42 @@ export default function App() {
         return "Empty. Drag a record onto this tab to file it here.";
     }
   }, [activeTab]);
+
+  const renderRecord = (record: TrackedRecord) => {
+    const token =
+      record.tokenId === null ? undefined : tokens.get(record.tokenId);
+    return (
+      <Fragment key={record.id}>
+        <RecordRow
+          record={record}
+          token={token}
+          selectedToken={selectedToken}
+          selected={
+            record.tokenId !== null && selection.includes(record.tokenId)
+          }
+          expanded={expandedId === record.id}
+          showAdjust={activeTab === PLAYER_TAB}
+          onStatChange={handleStatChange}
+          onToggleExpanded={toggleExpanded}
+          onAssign={handleAssign}
+        />
+        {expandedId === record.id && (
+          <RecordDetails
+            record={record}
+            token={token}
+            onStatChange={handleStatChange}
+            onAcChange={handleAcChange}
+            onNameChange={handleNameChange}
+            onNoteChange={handleNoteChange}
+            onConditionsChange={handleConditionsChange}
+            onAssign={handleAssign}
+            onTogglePlayer={handleTogglePlayer}
+            onDelete={handleDelete}
+          />
+        )}
+      </Fragment>
+    );
+  };
 
   return (
     <div className="app-surface flex h-full overflow-hidden">
@@ -667,6 +732,11 @@ export default function App() {
             <CategoryBar
               name={activeCategory.name}
               hidden={activeCategory.hidden}
+              count={
+                state.records.filter(
+                  (record) => record.categoryId === activeCategory.id,
+                ).length
+              }
               onRename={(name) =>
                 editCategories((current) =>
                   withCategory(current, activeCategory.id, { name }),
@@ -691,53 +761,22 @@ export default function App() {
           )}
 
           <main className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1">
-            {shown.length === 0 ? (
-              <Placeholder>{emptyMessage}</Placeholder>
-            ) : (
-              <SortableContext
-                items={shown.map((record) => record.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {shown.map((record) => {
-                  const token =
-                    record.tokenId === null
-                      ? undefined
-                      : tokens.get(record.tokenId);
-                  return (
-                    <Fragment key={record.id}>
-                      <RecordRow
-                        record={record}
-                        token={token}
-                        selectedToken={selectedToken}
-                        selected={
-                          record.tokenId !== null &&
-                          selection.includes(record.tokenId)
-                        }
-                        expanded={expandedId === record.id}
-                        showAdjust={activeTab === PLAYER_TAB}
-                        onStatChange={handleStatChange}
-                        onToggleExpanded={toggleExpanded}
-                        onAssign={handleAssign}
-                      />
-                      {expandedId === record.id && (
-                        <RecordDetails
-                          record={record}
-                          token={token}
-                          onStatChange={handleStatChange}
-                          onAcChange={handleAcChange}
-                          onNameChange={handleNameChange}
-                          onNoteChange={handleNoteChange}
-                          onConditionsChange={handleConditionsChange}
-                          onAssign={handleAssign}
-                          onTogglePlayer={handleTogglePlayer}
-                          onDelete={handleDelete}
-                        />
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </SortableContext>
-            )}
+            <SortableContext
+              items={[...selected, ...shown].map((record) => record.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {selected.length > 0 && (
+                <div className="mb-1.5 border-b border-ink-200 pb-1.5 dark:border-ink-800">
+                  {selected.map(renderRecord)}
+                </div>
+              )}
+
+              {shown.length === 0 && selected.length === 0 ? (
+                <Placeholder>{emptyMessage}</Placeholder>
+              ) : (
+                shown.map(renderRecord)
+              )}
+            </SortableContext>
           </main>
 
           {/* A floating copy, portalled out of the scrolling list. Without it
