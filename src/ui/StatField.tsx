@@ -17,14 +17,7 @@ type Props = {
    */
   allowMath?: boolean;
   disabled?: boolean;
-  /**
-   * Which corners round off. "left"/"right" let two fields sit flush against
-   * each other as one control split down the middle — the right field also
-   * drops its left border, so the seam is a single line rather than a double
-   * one.
-   */
-  rounded?: "all" | "left" | "right";
-  /** A green cast, for the extra-HP half of a split HP field. */
+  /** A green cast, for an extra-HP field sitting beside a plain HP one. */
   tone?: "default" | "extra";
 };
 
@@ -47,7 +40,6 @@ export default function StatField({
   big = false,
   allowMath = true,
   disabled = false,
-  rounded = "all",
   tone = "default",
 }: Props) {
   const [draft, setDraft] = useState<string | null>(null);
@@ -75,13 +67,6 @@ export default function StatField({
 
   const editing = draft !== null;
   const shown = editing ? draft : String(value);
-
-  const roundedClass =
-    rounded === "left"
-      ? "rounded-l-md rounded-r-none"
-      : rounded === "right"
-        ? "rounded-r-md rounded-l-none border-l-0"
-        : "rounded-md";
 
   // Only preview when the draft is doing something a plain number would not.
   const preview = (() => {
@@ -139,8 +124,7 @@ export default function StatField({
         className={[
           widthClass,
           big ? "px-2 py-2 text-base font-medium" : "px-1.5 py-1 text-sm",
-          "no-spinner border text-center tabular-nums outline-none transition-colors",
-          roundedClass,
+          "no-spinner rounded-md border text-center tabular-nums outline-none transition-colors",
           tone === "extra"
             ? "border-ink-200 bg-white text-green-700 hover:border-ink-300"
             : "border-ink-200 bg-white text-ink-900 hover:border-ink-300",

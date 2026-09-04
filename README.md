@@ -19,9 +19,9 @@ without it.
   there.** Everything else opens in a panel underneath the row, which is also
   the only place it can be changed. A mistimed click during combat can cost you
   a hit point; it can never rename a character or unlink its token.
-  Once there is extra HP, the HP field splits in half — current HP on the
-  left, extra HP on the right — so a temporary pool can be spent down without
-  opening the panel; with none, it is one plain field like always.
+  Once there is extra HP, a second, smaller field for it appears right next
+  to HP — in green — so a temporary pool can be spent down without opening
+  the panel; with none, it is one plain HP field like always.
   Drag rows to reorder; the order sticks.
 - **Tabs, three to a row, one list at a time.** `Player`, `Ungrouped`, then a
   tab per category — so AZRAQI and Undead are two tabs rather than two headings

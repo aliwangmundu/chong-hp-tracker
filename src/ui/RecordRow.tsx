@@ -173,15 +173,16 @@ export default function RecordRow({
       </span>
 
       {record.extraHp > 0 ? (
-        // Cut in half rather than one wide field: left is HP, right is extra
-        // HP, so a temporary pool can be spent down without opening the
-        // panel — the reason it has its own slot at all.
-        <div className="flex w-20 shrink-0">
+        // Two fields, not one split in half — a 50/50 division of the same
+        // width this used to have left too little room for a 4-digit HP
+        // total, and (worse) fighting Tailwind's percentage width inside a
+        // flex item is what made it render broken in the first place. This
+        // just adds a second, smaller field beside the first.
+        <div className="flex shrink-0 items-center gap-1">
           <StatField
             label={`${record.name || "Record"} hit points`}
             value={record.hp}
-            widthClass="w-1/2"
-            rounded="left"
+            widthClass="w-12"
             onCommit={(next) =>
               onStatChange(record.id, "hp", clampHp(next, record.maxHp))
             }
@@ -189,8 +190,7 @@ export default function RecordRow({
           <StatField
             label={`${record.name || "Record"} extra hit points`}
             value={record.extraHp}
-            widthClass="w-1/2"
-            rounded="right"
+            widthClass="w-10"
             tone="extra"
             onCommit={(next) =>
               onStatChange(record.id, "extraHp", clampExtraHp(next))
