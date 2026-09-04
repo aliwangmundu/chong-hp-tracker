@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from "react";
-import { clampExtraHp, clampMaxHp } from "@/core/inlineMath";
+import { clampMaxHp } from "@/core/inlineMath";
 import { NOTE_MAX_LENGTH, RECORD_NAME_MAX_LENGTH } from "@/core/records";
 import type {
   AssignableToken,
@@ -15,6 +15,9 @@ type Props = {
   record: TrackedRecord;
   token: AssignableToken | undefined;
   onStatChange: (id: string, key: NumericStatKey, value: number) => void;
+  /** Extra HP is a top-up, not a stat: the amount typed here is added to HP
+   *  and the field resets to 0 in the same edit. */
+  onExtraHpChange: (id: string, amount: number) => void;
   onAcChange: (id: string, value: string) => void;
   onNameChange: (id: string, value: string) => void;
   onNoteChange: (id: string, value: string) => void;
@@ -22,6 +25,8 @@ type Props = {
   /** Only ever called with null here — linking happens from the row's slot. */
   onAssign: (id: string, tokenId: string | null) => void;
   onTogglePlayer: (id: string) => void;
+  /** Leaving the Player tab needs a scene open to file the record into. */
+  canLeavePlayer: boolean;
   onDelete: (id: string) => void;
 };
 
@@ -42,12 +47,14 @@ export default function RecordDetails({
   record,
   token,
   onStatChange,
+  onExtraHpChange,
   onAcChange,
   onNameChange,
   onNoteChange,
   onConditionsChange,
   onAssign,
   onTogglePlayer,
+  canLeavePlayer,
   onDelete,
 }: Props) {
   return (
@@ -120,12 +127,11 @@ export default function RecordDetails({
           <InlineStat label="Extra">
             <StatField
               label={`${record.name || "Record"} extra hit points`}
+              title="A top-up, not a pool: type an amount and it is added straight onto HP. Always shows 0 — there is nothing sitting here between hits."
               value={record.extraHp}
               widthClass="w-11"
               allowMath={false}
-              onCommit={(next) =>
-                onStatChange(record.id, "extraHp", clampExtraHp(next))
-              }
+              onCommit={(next) => onExtraHpChange(record.id, next)}
             />
           </InlineStat>
           <InlineStat label="Max">
@@ -146,6 +152,7 @@ export default function RecordDetails({
         <div className="flex items-center gap-2 border-t border-ink-200 pt-2 dark:border-ink-800">
           <PlayerTick
             checked={record.isPlayer}
+            disabled={record.isPlayer && !canLeavePlayer}
             onToggle={() => onTogglePlayer(record.id)}
           />
           <div className="flex-1" />
@@ -171,9 +178,11 @@ export default function RecordDetails({
  */
 function PlayerTick({
   checked,
+  disabled = false,
   onToggle,
 }: {
   checked: boolean;
+  disabled?: boolean;
   onToggle: () => void;
 }) {
   return (
@@ -181,15 +190,19 @@ function PlayerTick({
       type="button"
       role="checkbox"
       aria-checked={checked}
+      disabled={disabled}
       title={
-        checked
-          ? "A player record. Untick to move it back to the DM tab."
-          : "Tick to make this a player record — it moves to the Player tab."
+        disabled
+          ? "Open a scene to move this off the Player tab — that's where it would go."
+          : checked
+            ? "A player record. Untick to move it back to the DM tab."
+            : "Tick to make this a player record — it moves to the Player tab."
       }
       onClick={onToggle}
       className={[
         "flex shrink-0 items-center gap-1.5 rounded px-1.5 py-1 text-[11px]",
         "transition-colors hover:bg-ink-200 dark:hover:bg-ink-800",
+        "disabled:pointer-events-none disabled:opacity-40",
         checked
           ? "text-ink-800 dark:text-ink-100"
           : "text-ink-500 dark:text-ink-400",

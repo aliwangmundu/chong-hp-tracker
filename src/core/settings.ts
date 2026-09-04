@@ -13,10 +13,10 @@ export const FIRST_ROUND = 1;
 export const DEFAULT_SETTINGS: Settings = { round: FIRST_ROUND };
 
 /**
- * Settings live in room metadata, beside the records.
- *
- * The round drives the conditions on those records, so it travels with them —
- * across scenes, and in the same write. `recordStore` owns the writing; this
+ * Settings live in room metadata, beside the player records — it travels
+ * across scenes the same way they do, in the same write. It still drives the
+ * conditions on every record, non-player ones included; those just live in
+ * whichever scene is open, not here. `recordStore` owns the writing; this
  * module only knows how to read the value back out.
  */
 export function parseSettings(metadata: Metadata): Settings {

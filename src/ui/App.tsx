@@ -32,6 +32,7 @@ import {
 } from "@/core/categories";
 import type { RecordSpec } from "@/core/command";
 import { stepDurations } from "@/core/entries";
+import { clampExtraHp, clampHp } from "@/core/inlineMath";
 import {
   moveRecordInto,
   newRecord,
@@ -43,9 +44,7 @@ import {
 import {
   EMPTY_STATE,
   type TrackerState,
-  migrateSceneToRoom,
-  parseState,
-  readState,
+  combineState,
   updateState,
 } from "@/core/recordStore";
 import { FIRST_ROUND } from "@/core/settings";
@@ -118,24 +117,41 @@ export default function App() {
   }, []);
 
   /**
-   * Records, categories and the round all live in *room* metadata.
-   *
-   * That is what carries them from scene to scene, and it is why this is not
-   * gated on a scene being open — the list is there before you pick a map.
+   * Players and the round live in *room* metadata; everyone else, and the
+   * categories filing them, live in *scene* metadata. Neither source alone is
+   * the state — the two are combined on every change to either one, which is
+   * why both are cached here rather than read fresh each time.
    */
-  useEffect(() => {
-    const apply = (metadata: Metadata) => setState(parseState(metadata));
-    void OBR.room.getMetadata().then(apply);
-    return OBR.room.onMetadataChange(apply);
+  const roomMetadata = useRef<Metadata>({});
+  const sceneMetadata = useRef<Metadata>({});
+  const recombine = useCallback(() => {
+    setState(combineState(roomMetadata.current, sceneMetadata.current));
   }, []);
 
-  // Lift a pre-2.3 scene's list into the room, once, if the room is empty.
   useEffect(() => {
-    if (!sceneReady || !isGm) return;
-    void migrateSceneToRoom(isGm).then(async (moved) => {
-      if (moved) setState(await readState());
-    });
-  }, [isGm, sceneReady]);
+    const apply = (metadata: Metadata) => {
+      roomMetadata.current = metadata;
+      recombine();
+    };
+    void OBR.room.getMetadata().then(apply);
+    return OBR.room.onMetadataChange(apply);
+  }, [recombine]);
+
+  useEffect(() => {
+    if (!sceneReady) {
+      // Not a scene with nothing in it — no scene to read at all, which reads
+      // the same way: no non-player records, no categories.
+      sceneMetadata.current = {};
+      recombine();
+      return;
+    }
+    const apply = (metadata: Metadata) => {
+      sceneMetadata.current = metadata;
+      recombine();
+    };
+    void OBR.scene.getMetadata().then(apply);
+    return OBR.scene.onMetadataChange(apply);
+  }, [sceneReady, recombine]);
 
   useEffect(() => {
     void OBR.player.getSelection().then((ids) => setSelection(ids ?? []));
@@ -164,16 +180,16 @@ export default function App() {
   /**
    * Optimistic write.
    *
-   * The panel shows the change at once, then the room write goes out built
-   * from the live metadata rather than this local copy — so two people editing
-   * different records do not overwrite each other.
+   * The panel shows the change at once, then the room and scene writes go out
+   * built from the live metadata rather than this local copy — so two people
+   * editing different records do not overwrite each other.
    */
   const edit = useCallback(
     (mutate: (state: TrackerState) => TrackerState) => {
       setState(mutate);
-      void updateState(mutate);
+      void updateState(sceneReady, mutate);
     },
-    [],
+    [sceneReady],
   );
 
   const editRecords = useCallback(
@@ -207,7 +223,11 @@ export default function App() {
     [activeTab],
   );
 
+  /** A non-player record needs a scene open to have somewhere to be saved. */
+  const canAddNonPlayer = sceneReady;
+
   const addRecord = useCallback(() => {
+    if (activeTab !== PLAYER_TAB && !canAddNonPlayer) return;
     // The id is needed to open the panel, so the record is built here rather
     // than inside the mutate closure.
     const record = newRecord();
@@ -221,7 +241,7 @@ export default function App() {
     // Open it straight away: a new record has no name yet, and naming it is the
     // first thing anyone wants to do.
     setExpandedId(record.id);
-  }, [edit, tabDefaults]);
+  }, [activeTab, canAddNonPlayer, edit, tabDefaults]);
 
   /**
    * Bulk entry from the command bar.
@@ -232,6 +252,9 @@ export default function App() {
    * without a `#group` follows the open tab. Records and categories go in one
    * write so a new group can never arrive without the records that asked for
    * it.
+   *
+   * A spec that would land as a non-player record with no scene open is
+   * dropped rather than added invisibly — there is nowhere for it to be saved.
    */
   const addFromCommand = useCallback(
     (specs: RecordSpec[]) => {
@@ -248,6 +271,7 @@ export default function App() {
           let categoryId = fallback.categoryId;
           let isPlayer = fallback.isPlayer;
           if (spec.group !== null) {
+            if (!canAddNonPlayer) continue;
             const key = spec.group.toLowerCase();
             let category = byName.get(key);
             if (category === undefined) {
@@ -259,6 +283,7 @@ export default function App() {
             categoryId = category.id;
             isPlayer = false;
           }
+          if (!isPlayer && !canAddNonPlayer) continue;
           records.push({
             ...newRecord(spec.name),
             hp: spec.hp,
@@ -272,15 +297,21 @@ export default function App() {
         return { ...current, records, categories };
       });
     },
-    [edit, tabDefaults],
+    [canAddNonPlayer, edit, tabDefaults],
   );
 
-  /** A new category is somewhere you want to be, so it opens. */
+  /**
+   * A new category is somewhere you want to be, so it opens.
+   *
+   * Categories live in scene metadata — they only ever file non-player
+   * records — so there is nowhere to put one without a scene open.
+   */
   const addCategory = useCallback(() => {
+    if (!canAddNonPlayer) return;
     const category = newCategory();
     editCategories((current) => [...current, category]);
     pickTab(category.id);
-  }, [editCategories, pickTab]);
+  }, [canAddNonPlayer, editCategories, pickTab]);
 
   /**
    * Deleting a category deletes what is in it.
@@ -305,6 +336,27 @@ export default function App() {
   const handleStatChange = useCallback(
     (id: string, key: NumericStatKey, value: number) =>
       editRecords((current) => withRecord(current, id, statPatch(key, value))),
+    [editRecords],
+  );
+
+  /**
+   * Extra HP is a top-up, not a stat: the amount typed is added straight onto
+   * HP, clamped the same way HP always is, and the field itself goes back to
+   * 0 in the same edit — there is never a separate pool sitting between hits.
+   */
+  const handleExtraHpChange = useCallback(
+    (id: string, amount: number) =>
+      editRecords((current) =>
+        current.map((record) =>
+          record.id === id
+            ? {
+                ...record,
+                hp: clampHp(record.hp + clampExtraHp(amount), record.maxHp),
+                extraHp: 0,
+              }
+            : record,
+        ),
+      ),
     [editRecords],
   );
 
@@ -338,15 +390,20 @@ export default function App() {
    * The tick and the tabs say the same thing: a record sits in exactly one tab.
    * Its `categoryId` is left alone underneath, so unticking sends it home to
    * the category it came from rather than dumping it in Ungrouped.
+   *
+   * Leaving the Player tab needs a scene open — that is where a non-player
+   * record is saved — so that direction is a no-op without one.
    */
   const handleTogglePlayer = useCallback(
     (id: string) =>
       editRecords((current) =>
-        current.map((record) =>
-          record.id === id ? { ...record, isPlayer: !record.isPlayer } : record,
-        ),
+        current.map((record) => {
+          if (record.id !== id) return record;
+          if (record.isPlayer && !canAddNonPlayer) return record;
+          return { ...record, isPlayer: !record.isPlayer };
+        }),
       ),
-    [editRecords],
+    [canAddNonPlayer, editRecords],
   );
 
   const handleDelete = useCallback(
@@ -603,6 +660,9 @@ export default function App() {
           );
           return;
         }
+        // A non-player record is saved to the scene — nowhere to drop it
+        // without one open.
+        if (!canAddNonPlayer) return;
         const categoryId = asTab === UNGROUPED_TAB ? null : asTab;
         editRecords((current) =>
           withRecord(
@@ -630,7 +690,7 @@ export default function App() {
         moveRecordInto(current, activeId, categoryId, overId),
       );
     },
-    [activeTab, chosen, editRecords, state.records],
+    [activeTab, canAddNonPlayer, chosen, editRecords, state.records],
   );
 
   /** Linking needs exactly one token selected; two is ambiguous. */
@@ -690,12 +750,14 @@ export default function App() {
             record={record}
             token={token}
             onStatChange={handleStatChange}
+            onExtraHpChange={handleExtraHpChange}
             onAcChange={handleAcChange}
             onNameChange={handleNameChange}
             onNoteChange={handleNoteChange}
             onConditionsChange={handleConditionsChange}
             onAssign={handleAssign}
             onTogglePlayer={handleTogglePlayer}
+            canLeavePlayer={canAddNonPlayer}
             onDelete={handleDelete}
           />
         )}
@@ -721,9 +783,12 @@ export default function App() {
             onStep={stepRound}
             canStepBack={state.round > FIRST_ROUND}
             onAddRecord={addRecord}
+            addRecordDisabled={activeTab !== PLAYER_TAB && !canAddNonPlayer}
             onAddCategory={addCategory}
+            addCategoryDisabled={!canAddNonPlayer}
             onToggleCommand={() => setCommandOpen((open) => !open)}
             commandOpen={commandOpen}
+            commandDisabled={activeTab !== PLAYER_TAB && !canAddNonPlayer}
           />
 
           <TabStrip tabs={tabs} active={activeTab} onSelect={pickTab} />

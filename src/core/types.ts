@@ -8,10 +8,16 @@ export type Condition = {
 /**
  * One line in the tracker.
  *
- * The record is the thing that exists — it is created by hand, carries all the
- * stats, and lives in scene metadata. A token is an optional attachment: link
- * one and the bubbles get somewhere to draw, or leave it unlinked and the
- * record is still perfectly usable as a line in the list.
+ * The record is the thing that exists — it is created by hand and carries all
+ * the stats. A token is an optional attachment: link one and the bar and
+ * bubbles get somewhere to draw, or leave it unlinked and the record is still
+ * perfectly usable as a line in the list.
+ *
+ * Where it lives depends on `isPlayer`: a player record is written to *room*
+ * metadata, so the same party is there whichever map you open; every other
+ * record is written to *scene* metadata, so it belongs to the encounter it was
+ * made in and is gone when you switch maps — the same way its token link
+ * already was.
  */
 export type TrackedRecord = {
   id: string;
@@ -19,7 +25,11 @@ export type TrackedRecord = {
   /** Scene item this record draws on, or null when nothing is linked. */
   tokenId: string | null;
   hp: number;
-  /** Added to HP for the bubble on the token. Temporary hit points. */
+  /**
+   * A one-shot top-up: type an amount here and it is added straight onto HP,
+   * then this resets to 0. It is never a running pool of its own — reading it
+   * back is 0 except in the instant between typing and committing.
+   */
   extraHp: number;
   /** Recorded but never drawn on the map. Caps the HP field. */
   maxHp: number;

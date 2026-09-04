@@ -86,10 +86,11 @@ without it.
 
 - **The chevron on each row** expands it in place, full width and flush with
   the row. Inside, top to bottom: a free-text **note**, the conditions, the
-  name, the token link, then AC, extra HP (temporary hit points, added into the
-  number on the token) and max HP (caps the HP field, never drawn on the map)
-  on one line. Extra and max are plain number fields — arithmetic entry is for
-  HP only, where "-25" is what you actually mean.
+  name, the token link, then AC, extra HP and max HP (caps the HP field, never
+  drawn on the map) on one line. Extra HP is not a pool of its own — type an
+  amount and it is added straight onto HP, then the field resets to 0. Extra
+  and max are plain number fields — arithmetic entry is for HP only, where
+  "-25" is what you actually mean.
 - **A round counter** sits top left: `Round 3 ‹ ›`. Advancing it counts
   every condition on every record down by one; stepping back counts them up, so
   the two arrows undo each other.
@@ -98,18 +99,26 @@ without it.
   name and a countdown the round drives, with a small `×` to remove it.
 - **Condition circles on the token.** Up to four along the top edge, each
   showing that condition's remaining duration, turning red at 0.
-- **The list follows you between scenes.** Records, categories and the round
-  live in the room, not the scene, so the same party is there whichever map you
-  open. Token links are the exception — see below.
+- **Players follow you between scenes; everyone else stays with the map.**
+  Player records and the round live in the room, so the party is there
+  whichever map you open. Monsters and NPCs, and the categories that hold
+  them, live in the scene instead — the roster for one map does not bleed
+  into the next. Tick a record onto the Player tab and it moves from the
+  scene into the room, ready to follow you anywhere; untick it and it goes
+  back to a category in the scene that is open when you do it. Adding or
+  filing a non-player record needs a scene open, for the same reason a token
+  link does — see below.
 - **Hiding is a property of the category.** Players never see a hidden category
   or anything in it; the GM always sees every one. New categories start hidden,
-  so staging the next wave takes one step and reveals in one click. Bubbles on
-  the linked tokens are unaffected — a monster still shows HP and AC on the map;
-  the roster line is what hides, not the numbers.
-- **Bubbles on the linked token.** HP bottom-left in red, AC bottom-right in
-  slate. HP always draws, because linking a token is the deliberate act that
-  says "put this one on the map"; AC appears once you fill it in. An unlinked
-  record draws nothing anywhere.
+  so staging the next wave takes one step and reveals in one click. The bar
+  and bubble on the linked tokens are unaffected — a monster still shows HP
+  and AC on the map; the roster line is what hides, not the numbers.
+- **A health bar and an AC bubble on the linked token.** A slim bar sits
+  bottom-left, its fill shrinking with HP and the number sitting just above
+  it; AC stays a small circle, bottom-right in slate. The bar always draws,
+  because linking a token is the deliberate act that says "put this one on
+  the map"; AC appears once you fill it in. An unlinked record draws nothing
+  anywhere.
 
 Everyone in the room sees the panel and can edit it.
 
@@ -128,9 +137,9 @@ npm run build     # → docs/  (nothing is published until you run this)
 To try your changes, run `npm run dev`, then in an Owlbear room choose
 **Add Extension** and paste `http://localhost:5173/manifest.json`.
 
-The panel hot-reloads as you edit. The code that draws bubbles on tokens runs
-once per page load, so refresh the Owlbear tab after changing anything under
-`src/obr/`.
+The panel hot-reloads as you edit. The code that draws the bar and bubbles on
+tokens runs once per page load, so refresh the Owlbear tab after changing
+anything under `src/obr/`.
 
 ## Publishing
 
@@ -182,14 +191,14 @@ it (Ctrl+Shift+R), then reload Owlbear.
 
 ```
 manifest.json    what Owlbear loads
-background.html  headless; draws the HP and AC bubbles
+background.html  headless; draws the HP bar and AC bubble
 action.html      the tracker panel
 index.html       landing page that prints the install URL
 ```
 
 ```
 src/core/    records, categories, command parser, inline math, AC, settings
-src/obr/     bounds maths, bubble builders, the sync loop
+src/obr/     bounds maths, health bar and bubble builders, the sync loop
 src/ui/      the panel
 ```
 
@@ -250,30 +259,33 @@ src/ui/      the panel
   16kB of room metadata, and free text is the one field that could eat it. Long
   enough for a reminder, short enough that fifty records still fit.
 
-- **Records are the model; tokens are a link.** Stats live in one array in
-  room metadata, keyed by nothing but the record's own id. That is what lets a
-  record exist before a token does, survive the token being deleted, and be
-  moved to a different token without losing anything.
-- **Room metadata is the whole of the cross-scene persistence.** It is scoped to
-  the room and outlives any scene. This works now only because a record has its
-  own id; the earlier attempt had to match a character back to a token by name
-  and image, and that guesswork is what made it unreliable.
+- **Records are the model; tokens are a link.** Stats live in one array, keyed
+  by nothing but the record's own id — in room metadata for players, in scene
+  metadata for everyone else. That is what lets a record exist before a token
+  does, survive the token being deleted, and be moved to a different token
+  without losing anything.
+- **Room metadata is the cross-scene persistence; scene metadata is everything
+  local to a map.** A player's id is what lets it survive a scene change at
+  all — the earlier attempt had to match a character back to a token by name
+  and image, and that guesswork is what made it unreliable. Everyone else
+  simply has no reason to survive one: a scene's monsters belong to that
+  scene, so they live and die with it.
 - **A token link is a scene item id, and those are per-scene.** So a link made
   on one map is inert on another — the row says "Not in this scene" and draws
   nothing — and comes back to life when you return. Each record holds one link
-  at a time, so re-linking on a second map replaces the first.
-- **Upgrading lifts an old scene list into the room, once.** It only fires when
-  the room holds nothing at all, so it can never overwrite a real list, and only
-  the GM runs it so two clients cannot race to import the same thing.
-- **Attachments are local items.** Each client draws its own bubbles from the
-  shared records, so the scene file stays clean, undo history is not full of
-  bubble items, and nothing is replicated four times per token.
+  at a time, so re-linking on a second map replaces the first. This applies
+  doubly to non-player records, which cannot even be edited from a different
+  scene: they are not there to edit.
+- **Attachments are local items.** Each client draws its own health bar and
+  bubbles from the shared records, so the scene file stays clean, undo history
+  is not full of attachment items, and nothing is replicated four times per
+  token.
 - **Writes re-read first.** Every record is in one array under one key, so a
-  write is built from the scene's current metadata rather than the copy the
-  panel is holding — otherwise two people editing different records would
-  overwrite each other wholesale. It narrows the race to a single call rather
-  than eliminating it; the per-item writes this replaced could not race at all,
-  which is the price of the record model.
+  write is built from the room's and scene's current metadata rather than the
+  copy the panel is holding — otherwise two people editing different records
+  would overwrite each other wholesale. It narrows the race to a single call
+  per store rather than eliminating it; the per-item writes this replaced
+  could not race at all, which is the price of the record model.
 - **Linking is exclusive.** Assigning a token clears it from any other record
   first. Two records pointing at one token would draw two sets of bubbles on
   top of each other.
@@ -281,17 +293,23 @@ src/ui/      the panel
   defaults fail the same way on purpose: revealing something by accident cannot
   be undone, and the usual reason to make a category mid-session is to stage
   what the party should not see yet.
-- **Records and categories are written together.** They are separate metadata
-  keys but not independent — deleting a category has to unfile its records in
-  the same breath, or a refresh landing between two writes would leave rows
-  pointing at nothing. `setMetadata` takes both keys in one call.
+- **Records and categories are written together, within each store.**
+  Non-player records and categories are separate keys in scene metadata but
+  not independent — deleting a category has to unfile its records in the same
+  breath, or a refresh landing between two writes would leave rows pointing at
+  nothing. `updateState` re-reads both stores, applies the mutation to the
+  combined state, then splits it back: room metadata always gets the player
+  records and the round in one `setMetadata`, and scene metadata gets the
+  non-player records and categories in another — skipped entirely when no
+  scene is open, since there is nowhere for that half to go.
 - **A record filed under a deleted category falls back to Ungrouped** rather
   than vanishing. Losing a category should never lose the thing inside it.
 - **The sync loop diffs.** It compares a signature string per token and only
-  rebuilds bubbles whose geometry or stats actually moved.
-- **Bubbles key off metadata presence, not value.** A monster knocked to 0 HP
-  still shows a `0` bubble; a token nobody has touched shows none. Checking for
-  a non-zero value would make dead monsters look untracked.
+  rebuilds attachments whose geometry or stats actually moved.
+- **Attachments key off metadata presence, not value.** A monster knocked to 0
+  HP still shows an empty bar and a `0`; a token nobody has touched shows
+  nothing. Checking for a non-zero value would make dead monsters look
+  untracked.
 - **Expired conditions are kept, not deleted.** A duration of 0 turns red and
   stays put. The counter's job is counting; deciding an effect has actually
   ended is the GM's call — and keeping the row is what lets stepping the round

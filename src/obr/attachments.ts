@@ -31,6 +31,32 @@ const TEXT_COLOR = "#ffffff";
 const FILL_OPACITY = 0.85;
 const STROKE_OPACITY = 0.55;
 
+// --- The health bar ----------------------------------------------------
+// A slim, quiet bar rather than a circle: its length says how hurt something
+// is at a glance, and the number above it says exactly how much.
+
+const BAR_WIDTH = 46;
+const BAR_HEIGHT = 7;
+/** Slightly shorter than the track, so the fill reads as inset rather than
+ *  edge-to-edge with it. */
+const BAR_FILL_HEIGHT = BAR_HEIGHT - 2;
+const BAR_TEXT_HEIGHT = 12;
+const BAR_TEXT_GAP = 1;
+const BAR_FONT_SIZE = 10;
+/** A sliver of fill stays visible above 0 hp — "barely alive" still reads as
+ *  alive, the way the number never disappears either. */
+const MIN_FILL_WIDTH = 3;
+
+const HP_TRACK_FILL = "#241414";
+const HP_TRACK_OPACITY = 0.6;
+const HP_TRACK_STROKE = "#7f1d1d";
+const HP_TRACK_STROKE_OPACITY = 0.45;
+
+/** A dark outline on the number, since it now sits over a bar rather than a
+ *  filled circle and needs to hold up against whatever art is underneath. */
+const BAR_TEXT_STROKE = "#000000";
+const BAR_TEXT_STROKE_OPACITY = 0.6;
+
 // --- Attachment ids --------------------------------------------------------
 // Deterministic ids let the sync loop rebuild an attachment in place and find
 // orphans without keeping a side table.
@@ -39,7 +65,8 @@ const STROKE_OPACITY = 0.55;
 export const MAX_CONDITION_BUBBLES = 4;
 
 const SUFFIXES = {
-  hpCircle: "/chong-hp-circle",
+  hpTrack: "/chong-hp-track",
+  hpFill: "/chong-hp-fill",
   hpText: "/chong-hp-text",
   acCircle: "/chong-ac-circle",
   acText: "/chong-ac-text",
@@ -135,15 +162,115 @@ function buildBubble(item: Image, bubble: Bubble): Item[] {
 }
 
 /**
- * Builds the HP and AC bubbles for a token.
+ * Builds the health bar: a track, a fill sized to HP over max HP, and the
+ * number above it.
  *
- * They sit on the bottom edge — HP bottom-left, AC bottom-right — and hold
- * those positions whether one or both are shown, so a bubble never jumps
- * sideways when you set the other stat.
+ * No max HP recorded reads as a full bar — the same "no cap" reading `maxHp`
+ * already has everywhere else — since there is nothing to measure the fill
+ * against. HP at or below 0 drops the fill entirely; the track and the "0"
+ * above it are what says the rest.
+ */
+function buildHealthBar(
+  item: Image,
+  record: TrackedRecord,
+  center: { x: number; y: number },
+): Item[] {
+  const hp = Math.max(record.hp, 0);
+  const ratio = record.maxHp > 0 ? Math.min(hp / record.maxHp, 1) : 1;
+  const fillWidth = hp <= 0 ? 0 : Math.max(BAR_WIDTH * ratio, MIN_FILL_WIDTH);
+  const left = center.x - BAR_WIDTH / 2;
+
+  const items: Item[] = [
+    buildShape()
+      .id(`${item.id}${SUFFIXES.hpTrack}`)
+      .shapeType("RECTANGLE")
+      .width(BAR_WIDTH)
+      .height(BAR_HEIGHT)
+      .position(center)
+      .fillColor(HP_TRACK_FILL)
+      .fillOpacity(HP_TRACK_OPACITY)
+      .strokeColor(HP_TRACK_STROKE)
+      .strokeOpacity(HP_TRACK_STROKE_OPACITY)
+      .strokeWidth(1)
+      .zIndex(30_000)
+      .attachedTo(item.id)
+      .layer("ATTACHMENT")
+      .locked(true)
+      .visible(item.visible)
+      .disableHit(true)
+      .disableAttachmentBehavior(DISABLED_BEHAVIORS)
+      .build(),
+  ];
+
+  if (fillWidth > 0) {
+    items.push(
+      buildShape()
+        .id(`${item.id}${SUFFIXES.hpFill}`)
+        .shapeType("RECTANGLE")
+        .width(fillWidth)
+        .height(BAR_FILL_HEIGHT)
+        .position({ x: left + fillWidth / 2, y: center.y })
+        .fillColor(HP_FILL)
+        .fillOpacity(FILL_OPACITY)
+        .strokeColor(HP_STROKE)
+        .strokeOpacity(STROKE_OPACITY)
+        .strokeWidth(0)
+        .zIndex(30_001)
+        .attachedTo(item.id)
+        .layer("ATTACHMENT")
+        .locked(true)
+        .visible(item.visible)
+        .disableHit(true)
+        .disableAttachmentBehavior(DISABLED_BEHAVIORS)
+        .build(),
+    );
+  }
+
+  items.push(
+    buildText()
+      .id(`${item.id}${SUFFIXES.hpText}`)
+      .position({
+        x: left,
+        y: center.y - BAR_HEIGHT / 2 - BAR_TEXT_GAP - BAR_TEXT_HEIGHT,
+      })
+      .plainText(String(hp))
+      .textType("PLAIN")
+      .textAlign("CENTER")
+      .textAlignVertical("BOTTOM")
+      .width(BAR_WIDTH)
+      .height(BAR_TEXT_HEIGHT)
+      .fontSize(BAR_FONT_SIZE)
+      .fontFamily(FONT)
+      .fontWeight(600)
+      .fillColor(TEXT_COLOR)
+      .fillOpacity(1)
+      .strokeColor(BAR_TEXT_STROKE)
+      .strokeOpacity(BAR_TEXT_STROKE_OPACITY)
+      .strokeWidth(2)
+      .lineHeight(1)
+      .attachedTo(item.id)
+      .layer("TEXT")
+      .locked(true)
+      .visible(item.visible)
+      .disableHit(true)
+      .disableAttachmentBehavior(DISABLED_BEHAVIORS)
+      .build(),
+  );
+
+  return items;
+}
+
+/**
+ * Builds the health bar and AC bubble for a token.
  *
- * Only ever called for a token a record is linked to, so HP always draws —
- * linking is the deliberate act that says "put this one on the map". Scenery
- * and unlinked tokens are never passed here at all.
+ * They sit on the bottom edge — the bar bottom-left, AC bottom-right — and
+ * hold those positions whether or not AC is shown, so nothing jumps sideways
+ * when you fill it in. On a token too narrow for both, each tucks toward the
+ * middle rather than overlapping the other.
+ *
+ * Only ever called for a token a record is linked to, so the bar always
+ * draws — linking is the deliberate act that says "put this one on the map".
+ * Scenery and unlinked tokens are never passed here at all.
  */
 export function buildAttachments(
   item: Image,
@@ -151,27 +278,24 @@ export function buildAttachments(
   sceneDpi: number,
 ): Item[] {
   const conditions = record.conditions.slice(0, MAX_CONDITION_BUBBLES);
-  // HP always shows: linking a token to a record is the deliberate act that
-  // says "draw this one". AC only shows when it has been filled in.
+  // AC only shows once it has been filled in.
   const showAc = record.ac !== "";
 
   const { center, width, height } = getTokenBounds(item, sceneDpi);
   const bottom = center.y + height / 2;
-  const y = bottom - DIAMETER / 2 - EDGE_PADDING;
 
-  // On a token too narrow for both, tuck them either side of the middle
-  // instead of letting them overlap.
-  const halfSpan = Math.max(width / 2 - DIAMETER / 2 - EDGE_PADDING, DIAMETER / 2);
+  const barHalfSpan = Math.max(
+    width / 2 - BAR_WIDTH / 2 - EDGE_PADDING,
+    BAR_WIDTH / 2,
+  );
+  const acHalfSpan = Math.max(
+    width / 2 - DIAMETER / 2 - EDGE_PADDING,
+    DIAMETER / 2,
+  );
 
-  const items: Item[] = buildBubble(item, {
-    id: `${item.id}${SUFFIXES.hpCircle}`,
-    textId: `${item.id}${SUFFIXES.hpText}`,
-    // Temporary hit points are folded into the number on the map; the panel is
-    // where the split between the two is visible.
-    value: String(record.hp + record.extraHp),
-    fill: HP_FILL,
-    stroke: HP_STROKE,
-    center: { x: center.x - halfSpan, y },
+  const items: Item[] = buildHealthBar(item, record, {
+    x: center.x - barHalfSpan,
+    y: bottom - BAR_HEIGHT / 2 - EDGE_PADDING,
   });
 
   if (showAc) {
@@ -182,13 +306,13 @@ export function buildAttachments(
         value: record.ac,
         fill: AC_FILL,
         stroke: AC_STROKE,
-        center: { x: center.x + halfSpan, y },
+        center: { x: center.x + acHalfSpan, y: bottom - DIAMETER / 2 - EDGE_PADDING },
       }),
     );
   }
 
   // Conditions run along the top edge, left to right, so they never collide
-  // with the HP and AC bubbles sitting on the bottom one.
+  // with the bar and AC bubble sitting on the bottom one.
   if (conditions.length > 0) {
     const top = center.y - height / 2 + DIAMETER / 2 + EDGE_PADDING;
     const step = DIAMETER + 2;
@@ -217,10 +341,12 @@ export function buildAttachments(
 }
 
 /**
- * Everything about a token that changes what its bubbles look like.
+ * Everything about a token that changes what its bar and bubbles look like.
  *
  * The sync loop compares these strings instead of re-deriving geometry, so a
  * scene change that only moves an unrelated item costs one string compare.
+ * `maxHp` is here because it changes the bar's fill even when HP itself has
+ * not moved.
  */
 export function attachmentSignature(
   item: Image,
@@ -229,7 +355,7 @@ export function attachmentSignature(
 ): string {
   return [
     record.hp,
-    record.extraHp,
+    record.maxHp,
     record.ac,
     record.conditions
       .slice(0, MAX_CONDITION_BUBBLES)

@@ -16,75 +16,97 @@ export const EMPTY_STATE: TrackerState = {
   round: FIRST_ROUND,
 };
 
-export function parseState(metadata: Record<string, unknown>): TrackerState {
+/**
+ * The two record lists no single metadata source holds on its own.
+ *
+ * A player record reads from room metadata; everyone else reads from scene
+ * metadata. Each source can hold junk left by the other half of a hand edit —
+ * a player flag on something filed in the scene, say — so both lists are
+ * filtered by `isPlayer` rather than trusted to only contain their own kind.
+ */
+export function combineRecords(
+  roomMetadata: Record<string, unknown>,
+  sceneMetadata: Record<string, unknown>,
+): TrackedRecord[] {
+  return [
+    ...parseRecords(roomMetadata).filter((record) => record.isPlayer),
+    ...parseRecords(sceneMetadata).filter((record) => !record.isPlayer),
+  ];
+}
+
+/**
+ * Players and the round live in *room* metadata — the party is there
+ * whichever map you open. Everyone else, and the categories that file them,
+ * live in *scene* metadata instead: a monster typed in mid-fight belongs to
+ * that encounter, not to every map in the campaign. A token link already
+ * worked this way — a scene item id is inert on another scene — this just
+ * makes the roster around it match.
+ *
+ * `sceneMetadata` is `{}` when no scene is open, which reads the same as an
+ * open scene that happens to hold nothing: no non-player records, no
+ * categories.
+ */
+export function combineState(
+  roomMetadata: Record<string, unknown>,
+  sceneMetadata: Record<string, unknown>,
+): TrackerState {
   return {
-    records: parseRecords(metadata),
-    categories: parseCategories(metadata),
-    round: parseSettings(metadata).round,
+    records: combineRecords(roomMetadata, sceneMetadata),
+    categories: parseCategories(sceneMetadata),
+    round: parseSettings(roomMetadata).round,
   };
 }
 
-export function isEmptyState(state: TrackerState): boolean {
-  return state.records.length === 0 && state.categories.length === 0;
+async function readState(sceneReady: boolean): Promise<TrackerState> {
+  const [roomMetadata, sceneMetadata] = await Promise.all([
+    OBR.room.getMetadata(),
+    sceneReady
+      ? OBR.scene.getMetadata()
+      : Promise.resolve<Record<string, unknown>>({}),
+  ]);
+  return combineState(roomMetadata, sceneMetadata);
 }
 
 /**
- * Everything lives in *room* metadata, not scene metadata.
+ * Read-modify-write against the live metadata, split across the two stores it
+ * touches.
  *
- * That is the whole of the cross-scene persistence: room metadata is scoped to
- * the room and outlives any individual scene, so the same list is there
- * whichever map you open. It works because a record is identified by its own
- * id — there is no matching a character back up to a token by name or image.
- */
-export async function readState(): Promise<TrackerState> {
-  return parseState(await OBR.room.getMetadata());
-}
-
-/**
- * Read-modify-write against the live room metadata — all three keys at once.
+ * Each store gets its own read-modify-write built from the same mutated
+ * state, so a write is never based on the copy the panel happens to be
+ * holding — otherwise two people editing different records could overwrite
+ * each other wholesale. Within a store, keys that change together still go in
+ * one `setMetadata` call: advancing the round changes both the round and
+ * every condition it counts down, and two writes there would mean two round
+ * trips, each echoing back a snapshot the other had not landed in yet.
  *
- * They are separate keys but not independent, and writing them separately is a
- * bug rather than a style choice. Advancing the round changes both the round
- * and every condition it counts down; two writes means two round trips, each
- * echoing back a snapshot the other has not landed in yet, and the second echo
- * silently reverts the first. Deleting a category has the same shape: it must
- * unfile its records in the same breath or a refresh between the writes leaves
- * rows pointing at nothing.
- *
- * Reading first is what keeps two people editing different records from
- * overwriting each other wholesale; it narrows that race to a single call
- * rather than removing it.
+ * When no scene is open there is nowhere to put a non-player record or a
+ * category, so that half of the write is skipped entirely rather than
+ * failing — the panel is expected not to have produced one, since it disables
+ * the controls that would.
  */
 export async function updateState(
+  sceneReady: boolean,
   mutate: (state: TrackerState) => TrackerState,
 ): Promise<void> {
-  const next = mutate(await readState());
-  await OBR.room.setMetadata({
-    [RECORDS_KEY]: next.records,
-    [CATEGORIES_KEY]: next.categories,
-    [SETTINGS_KEY]: { round: next.round },
-  });
-}
+  const next = mutate(await readState(sceneReady));
 
-/**
- * One-time lift of a scene's records into the room.
- *
- * Earlier versions kept everything in scene metadata. Without this, upgrading
- * would silently empty a party someone had already set up. It only fires when
- * the room holds nothing at all, so it can never overwrite a real list, and
- * only the GM runs it so two clients cannot race to do the same import.
- */
-export async function migrateSceneToRoom(isGm: boolean): Promise<boolean> {
-  if (!isGm) return false;
-  if (!isEmptyState(await readState())) return false;
+  const players = next.records.filter((record) => record.isPlayer);
+  const writes: Promise<void>[] = [
+    OBR.room.setMetadata({
+      [RECORDS_KEY]: players,
+      [SETTINGS_KEY]: { round: next.round },
+    }),
+  ];
 
-  const fromScene = parseState(await OBR.scene.getMetadata());
-  if (isEmptyState(fromScene)) return false;
+  if (sceneReady) {
+    const others = next.records.filter((record) => !record.isPlayer);
+    writes.push(
+      OBR.scene.setMetadata({
+        [RECORDS_KEY]: others,
+        [CATEGORIES_KEY]: next.categories,
+      }),
+    );
+  }
 
-  await OBR.room.setMetadata({
-    [RECORDS_KEY]: fromScene.records,
-    [CATEGORIES_KEY]: fromScene.categories,
-    [SETTINGS_KEY]: { round: fromScene.round },
-  });
-  return true;
+  await Promise.all(writes);
 }

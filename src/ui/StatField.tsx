@@ -5,6 +5,8 @@ type Props = {
   value: number;
   onCommit: (next: number) => void;
   label: string;
+  /** Overrides the tooltip that is otherwise built from `label`. */
+  title?: string;
   /** Tailwind width class; the HP field is wider than AC. */
   widthClass?: string;
   /** Taller with a larger typeface — used for HP, the field you actually type in. */
@@ -31,6 +33,7 @@ export default function StatField({
   value,
   onCommit,
   label,
+  title,
   widthClass = "w-14",
   big = false,
   allowMath = true,
@@ -111,7 +114,7 @@ export default function StatField({
         spellCheck={false}
         aria-label={label}
         title={
-          allowMath ? `${label} — type -25, +8 or -25 + 8` : label
+          title ?? (allowMath ? `${label} — type -25, +8 or -25 + 8` : label)
         }
         disabled={disabled}
         value={shown}

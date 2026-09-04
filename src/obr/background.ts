@@ -1,6 +1,6 @@
 import OBR, { type Image, type Item, type Metadata } from "@owlbear-rodeo/sdk";
 import { getPluginId } from "@/core/pluginId";
-import { parseRecords } from "@/core/records";
+import { combineRecords } from "@/core/recordStore";
 import { isAssignableItem } from "@/core/tokens";
 import type { TrackedRecord } from "@/core/types";
 import {
@@ -11,12 +11,13 @@ import {
 } from "./attachments";
 
 /**
- * Draws the HP, AC and condition bubbles on linked tokens.
+ * Draws the health bar, AC and condition bubbles on linked tokens.
  *
- * Two inputs, not one: the records live in room metadata and the tokens live in
- * the scene, so a redraw is triggered by either changing. A record with no
- * token — or one whose token belongs to a different scene — simply draws
- * nothing here.
+ * Three inputs, not one: a player's record lives in room metadata, everyone
+ * else's lives in scene metadata, and the tokens themselves live in the
+ * scene — so a redraw is triggered by any of the three changing. A record
+ * with no token — or one whose token belongs to a different scene — simply
+ * draws nothing here.
  *
  * Attachments are *local* items: every client renders its own from the shared
  * records. That keeps them out of the saved scene, out of undo history, and
@@ -30,6 +31,12 @@ let sceneDpi = 150;
 let running = false;
 let records: TrackedRecord[] = [];
 let tokens: Image[] = [];
+let roomMetadata: Metadata = {};
+let sceneMetadata: Metadata = {};
+
+function recombine(): void {
+  records = combineRecords(roomMetadata, sceneMetadata);
+}
 
 async function clearLocalAttachments(): Promise<void> {
   const stale = await OBR.scene.local.getItems(isOurAttachment);
@@ -87,10 +94,14 @@ async function start(): Promise<void> {
   running = true;
 
   sceneDpi = await OBR.scene.grid.getDpi();
-  [records, tokens] = await Promise.all([
-    OBR.room.getMetadata().then(parseRecords),
+  let sceneTokens: Image[];
+  [roomMetadata, sceneMetadata, sceneTokens] = await Promise.all([
+    OBR.room.getMetadata(),
+    OBR.scene.getMetadata(),
     OBR.scene.items.getItems<Image>(isAssignableItem),
   ]);
+  recombine();
+  tokens = sceneTokens;
   await refresh();
 
   OBR.scene.items.onChange((items) => {
@@ -99,7 +110,14 @@ async function start(): Promise<void> {
   });
 
   OBR.room.onMetadataChange((metadata: Metadata) => {
-    records = parseRecords(metadata);
+    roomMetadata = metadata;
+    recombine();
+    void sync();
+  });
+
+  OBR.scene.onMetadataChange((metadata: Metadata) => {
+    sceneMetadata = metadata;
+    recombine();
     void sync();
   });
 
@@ -119,6 +137,8 @@ OBR.onReady(async () => {
       drawn.clear();
       records = [];
       tokens = [];
+      roomMetadata = {};
+      sceneMetadata = {};
     }
   });
 

@@ -5,10 +5,17 @@ type Props = {
   onStep: (delta: 1 | -1) => void;
   canStepBack: boolean;
   onAddRecord: () => void;
+  /** No scene open to save a non-player record into, and this isn't Player. */
+  addRecordDisabled?: boolean;
   onAddCategory: () => void;
+  /** Categories are scene-scoped; there is nowhere to put one without one. */
+  addCategoryDisabled?: boolean;
   onToggleCommand: () => void;
   commandOpen: boolean;
+  commandDisabled?: boolean;
 };
+
+const SCENE_NEEDED = "Open a scene first — there's nowhere to save it yet.";
 
 /**
  * The combat round, pinned above the record list, with the two add buttons.
@@ -22,9 +29,12 @@ export default function RoundBar({
   onStep,
   canStepBack,
   onAddRecord,
+  addRecordDisabled = false,
   onAddCategory,
+  addCategoryDisabled = false,
   onToggleCommand,
   commandOpen,
+  commandDisabled = false,
 }: Props) {
   return (
     <div className="flex shrink-0 items-center gap-1 px-2 py-1.5">
@@ -46,9 +56,14 @@ export default function RoundBar({
 
       <div className="flex flex-1 items-center justify-end gap-0.5">
         <AddButton
-          label="Add several at once by typing them"
+          label={
+            commandDisabled
+              ? SCENE_NEEDED
+              : "Add several at once by typing them"
+          }
           onClick={onToggleCommand}
           active={commandOpen}
+          disabled={commandDisabled}
           strokeWidth={2}
         >
           <path d="m5 8 3.5 3.5L5 15" />
@@ -57,15 +72,24 @@ export default function RoundBar({
         </AddButton>
 
         <AddButton
-          label="New category — hidden from players until you reveal it"
+          label={
+            addCategoryDisabled
+              ? SCENE_NEEDED
+              : "New category — hidden from players until you reveal it"
+          }
           onClick={onAddCategory}
+          disabled={addCategoryDisabled}
           strokeWidth={2}
         >
           <path d="M3 7a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.93L11.5 7H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
           <path d="M12 11v5M9.5 13.5h5" />
         </AddButton>
 
-        <AddButton label="Add a record" onClick={onAddRecord}>
+        <AddButton
+          label={addRecordDisabled ? SCENE_NEEDED : "Add a record"}
+          onClick={onAddRecord}
+          disabled={addRecordDisabled}
+        >
           <path d="M12 5v14M5 12h14" />
         </AddButton>
       </div>
@@ -78,23 +102,27 @@ function AddButton({
   onClick,
   strokeWidth = 2.5,
   active = false,
+  disabled = false,
   children,
 }: {
   label: string;
   onClick: () => void;
   strokeWidth?: number;
   active?: boolean;
+  disabled?: boolean;
   children: ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-label={label}
       aria-pressed={active}
       title={label}
       className={[
         "flex size-6 items-center justify-center rounded-md transition-colors",
+        "disabled:pointer-events-none disabled:opacity-30",
         active
           ? "bg-ink-300 text-ink-900 dark:bg-ink-700 dark:text-ink-50"
           : "text-ink-500 hover:bg-ink-200 hover:text-ink-900 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-ink-50",

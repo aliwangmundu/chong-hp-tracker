@@ -119,6 +119,24 @@ describe("releaseToken", () => {
   });
 });
 
+describe("extra hp", () => {
+  it("folds into hp on read and always reads back 0", () => {
+    const parsed = parseRecords({
+      [RECORDS_KEY]: [{ id: "a", hp: 5, extraHp: 4 }],
+    });
+    expect(parsed[0]?.hp).toBe(9);
+    expect(parsed[0]?.extraHp).toBe(0);
+  });
+
+  it("still caps the folded total at max hp", () => {
+    const parsed = parseRecords({
+      [RECORDS_KEY]: [{ id: "a", hp: 8, extraHp: 5, maxHp: 10 }],
+    });
+    expect(parsed[0]?.hp).toBe(10);
+    expect(parsed[0]?.extraHp).toBe(0);
+  });
+});
+
 describe("the player tick", () => {
   it("starts with the GM", () => {
     expect(newRecord("Goblin").isPlayer).toBe(false);
