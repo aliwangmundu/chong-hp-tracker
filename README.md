@@ -87,10 +87,11 @@ without it.
 - **The chevron on each row** expands it in place, full width and flush with
   the row. Inside, top to bottom: a free-text **note**, the conditions, the
   name, the token link, then AC, extra HP and max HP (caps the HP field, never
-  drawn on the map) on one line. Extra HP is not a pool of its own — type an
-  amount and it is added straight onto HP, then the field resets to 0. Extra
-  and max are plain number fields — arithmetic entry is for HP only, where
-  "-25" is what you actually mean.
+  drawn on the map) on one line. Extra HP is a pool of its own — inline math
+  and all, same as HP — shown beside HP rather than folded into it, so a
+  buffed character's temporary hit points never get mixed into their real
+  ones. Max is a plain number field; arithmetic entry is for HP and extra HP,
+  where "-25" is what you actually mean.
 - **A round counter** sits top left: `Round 3 ‹ ›`. Advancing it counts
   every condition on every record down by one; stepping back counts them up, so
   the two arrows undo each other.
@@ -110,15 +111,15 @@ without it.
   link does — see below.
 - **Hiding is a property of the category.** Players never see a hidden category
   or anything in it; the GM always sees every one. New categories start hidden,
-  so staging the next wave takes one step and reveals in one click. The bar
+  so staging the next wave takes one step and reveals in one click. The pill
   and bubble on the linked tokens are unaffected — a monster still shows HP
   and AC on the map; the roster line is what hides, not the numbers.
-- **A health bar and an AC bubble on the linked token.** A slim bar sits
-  bottom-left, its fill shrinking with HP and the number sitting just above
-  it; AC stays a small circle, bottom-right in slate. The bar always draws,
-  because linking a token is the deliberate act that says "put this one on
-  the map"; AC appears once you fill it in. An unlinked record draws nothing
-  anywhere.
+- **A health pill and an AC bubble on the linked token.** A small
+  rounded-corner oblong sits bottom-left with the number inside it — `8/8`,
+  or `8/8 + 8` once there is extra HP to show; AC stays a small circle,
+  bottom-right in slate. The pill always draws, because linking a token is
+  the deliberate act that says "put this one on the map"; AC appears once
+  you fill it in. An unlinked record draws nothing anywhere.
 
 Everyone in the room sees the panel and can edit it.
 
@@ -137,7 +138,7 @@ npm run build     # → docs/  (nothing is published until you run this)
 To try your changes, run `npm run dev`, then in an Owlbear room choose
 **Add Extension** and paste `http://localhost:5173/manifest.json`.
 
-The panel hot-reloads as you edit. The code that draws the bar and bubbles on
+The panel hot-reloads as you edit. The code that draws the pill and bubbles on
 tokens runs once per page load, so refresh the Owlbear tab after changing
 anything under `src/obr/`.
 
@@ -191,14 +192,14 @@ it (Ctrl+Shift+R), then reload Owlbear.
 
 ```
 manifest.json    what Owlbear loads
-background.html  headless; draws the HP bar and AC bubble
+background.html  headless; draws the HP pill and AC bubble
 action.html      the tracker panel
 index.html       landing page that prints the install URL
 ```
 
 ```
 src/core/    records, categories, command parser, inline math, AC, settings
-src/obr/     bounds maths, health bar and bubble builders, the sync loop
+src/obr/     bounds maths, health pill and bubble builders, the sync loop
 src/ui/      the panel
 ```
 
@@ -276,7 +277,7 @@ src/ui/      the panel
   at a time, so re-linking on a second map replaces the first. This applies
   doubly to non-player records, which cannot even be edited from a different
   scene: they are not there to edit.
-- **Attachments are local items.** Each client draws its own health bar and
+- **Attachments are local items.** Each client draws its own health pill and
   bubbles from the shared records, so the scene file stays clean, undo history
   is not full of attachment items, and nothing is replicated four times per
   token.
@@ -307,9 +308,15 @@ src/ui/      the panel
 - **The sync loop diffs.** It compares a signature string per token and only
   rebuilds attachments whose geometry or stats actually moved.
 - **Attachments key off metadata presence, not value.** A monster knocked to 0
-  HP still shows an empty bar and a `0`; a token nobody has touched shows
-  nothing. Checking for a non-zero value would make dead monsters look
-  untracked.
+  HP still shows a pill reading `0`; a token nobody has touched shows nothing.
+  Checking for a non-zero value would make dead monsters look untracked.
+- **The pill is a rectangle and two circles, not a rounded-rectangle shape.**
+  Owlbear's shape builder only draws `RECTANGLE`, `CIRCLE`, `TRIANGLE` and
+  `HEXAGON` — no corner radius. A circle whose radius matches the rectangle's
+  half-height, centered on each short edge, lands exactly on that edge's
+  corners, so the seam disappears; all three pieces share one flat fill and
+  skip the stroke entirely; a stroke on all three would leave the rectangle's
+  straight edges visible as two lines cutting through the rounded caps.
 - **Expired conditions are kept, not deleted.** A duration of 0 turns red and
   stays put. The counter's job is counting; deciding an effect has actually
   ended is the GM's call — and keeping the row is what lets stepping the round

@@ -32,7 +32,6 @@ import {
 } from "@/core/categories";
 import type { RecordSpec } from "@/core/command";
 import { stepDurations } from "@/core/entries";
-import { clampExtraHp, clampHp } from "@/core/inlineMath";
 import {
   moveRecordInto,
   newRecord,
@@ -336,27 +335,6 @@ export default function App() {
   const handleStatChange = useCallback(
     (id: string, key: NumericStatKey, value: number) =>
       editRecords((current) => withRecord(current, id, statPatch(key, value))),
-    [editRecords],
-  );
-
-  /**
-   * Extra HP is a top-up, not a stat: the amount typed is added straight onto
-   * HP, clamped the same way HP always is, and the field itself goes back to
-   * 0 in the same edit — there is never a separate pool sitting between hits.
-   */
-  const handleExtraHpChange = useCallback(
-    (id: string, amount: number) =>
-      editRecords((current) =>
-        current.map((record) =>
-          record.id === id
-            ? {
-                ...record,
-                hp: clampHp(record.hp + clampExtraHp(amount), record.maxHp),
-                extraHp: 0,
-              }
-            : record,
-        ),
-      ),
     [editRecords],
   );
 
@@ -750,7 +728,6 @@ export default function App() {
             record={record}
             token={token}
             onStatChange={handleStatChange}
-            onExtraHpChange={handleExtraHpChange}
             onAcChange={handleAcChange}
             onNameChange={handleNameChange}
             onNoteChange={handleNoteChange}

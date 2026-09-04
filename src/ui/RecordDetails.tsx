@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from "react";
-import { clampMaxHp } from "@/core/inlineMath";
+import { clampExtraHp, clampMaxHp } from "@/core/inlineMath";
 import { NOTE_MAX_LENGTH, RECORD_NAME_MAX_LENGTH } from "@/core/records";
 import type {
   AssignableToken,
@@ -15,9 +15,6 @@ type Props = {
   record: TrackedRecord;
   token: AssignableToken | undefined;
   onStatChange: (id: string, key: NumericStatKey, value: number) => void;
-  /** Extra HP is a top-up, not a stat: the amount typed here is added to HP
-   *  and the field resets to 0 in the same edit. */
-  onExtraHpChange: (id: string, amount: number) => void;
   onAcChange: (id: string, value: string) => void;
   onNameChange: (id: string, value: string) => void;
   onNoteChange: (id: string, value: string) => void;
@@ -47,7 +44,6 @@ export default function RecordDetails({
   record,
   token,
   onStatChange,
-  onExtraHpChange,
   onAcChange,
   onNameChange,
   onNoteChange,
@@ -127,11 +123,12 @@ export default function RecordDetails({
           <InlineStat label="Extra">
             <StatField
               label={`${record.name || "Record"} extra hit points`}
-              title="A top-up, not a pool: type an amount and it is added straight onto HP. Always shows 0 — there is nothing sitting here between hits."
+              title="A separate pool, shown as '+ N' beside HP rather than added into it — type -25, +8 or -25 + 8"
               value={record.extraHp}
               widthClass="w-11"
-              allowMath={false}
-              onCommit={(next) => onExtraHpChange(record.id, next)}
+              onCommit={(next) =>
+                onStatChange(record.id, "extraHp", clampExtraHp(next))
+              }
             />
           </InlineStat>
           <InlineStat label="Max">

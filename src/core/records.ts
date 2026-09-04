@@ -1,6 +1,6 @@
 import { normalizeAc } from "./ac";
 import { ENTRY_NAME_MAX_LENGTH, newEntryId } from "./entries";
-import { clampHp } from "./inlineMath";
+import { clampExtraHp, clampHp } from "./inlineMath";
 import { getPluginId } from "./pluginId";
 import type { Condition, NumericStatKey, TrackedRecord } from "./types";
 
@@ -82,10 +82,8 @@ export function parseRecords(
     if (typeof source["id"] !== "string") continue;
 
     const maxHp = readInt(source, "maxHp");
-    // Extra HP is never a stored pool of its own — any amount found here (this
-    // extension's own past writes, a hand-edited scene, an older version) is
-    // folded straight into HP and the field itself always reads back 0.
-    const hp = clampHp(readInt(source, "hp") + readInt(source, "extraHp"), maxHp);
+    const hp = clampHp(readInt(source, "hp"), maxHp);
+    const extraHp = clampExtraHp(readInt(source, "extraHp"));
 
     records.push({
       id: source["id"],
@@ -93,7 +91,7 @@ export function parseRecords(
       tokenId:
         typeof source["tokenId"] === "string" ? source["tokenId"] : null,
       hp,
-      extraHp: 0,
+      extraHp,
       maxHp,
       ac: normalizeAc(
         typeof source["ac"] === "string" ? source["ac"] : "",

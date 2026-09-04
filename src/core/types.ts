@@ -26,9 +26,10 @@ export type TrackedRecord = {
   tokenId: string | null;
   hp: number;
   /**
-   * A one-shot top-up: type an amount here and it is added straight onto HP,
-   * then this resets to 0. It is never a running pool of its own — reading it
-   * back is 0 except in the instant between typing and committing.
+   * A separate pool of bonus hit points — never folded into `hp`. It has its
+   * own slot in the row and on the token, reading "8/8 + 8" once there is
+   * any, so a temporary bonus never gets mistaken for real HP or lost in the
+   * same number.
    */
   extraHp: number;
   /** Recorded but never drawn on the map. Caps the HP field. */

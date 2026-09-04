@@ -18,7 +18,6 @@ const FONT_SIZE_SMALL = 13;
 const EDGE_PADDING = 2;
 
 const HP_FILL = "#8b1c1c";
-const HP_STROKE = "#fca5a5";
 const AC_FILL = "#1e293b";
 const AC_STROKE = "#cbd5e1";
 const CONDITION_FILL = "#4c1d95";
@@ -31,31 +30,23 @@ const TEXT_COLOR = "#ffffff";
 const FILL_OPACITY = 0.85;
 const STROKE_OPACITY = 0.55;
 
-// --- The health bar ----------------------------------------------------
-// A slim, quiet bar rather than a circle: its length says how hurt something
-// is at a glance, and the number above it says exactly how much.
+// --- The health pill ---------------------------------------------------
+// A small rounded-corner oblong rather than a bar or a circle: the number —
+// "current/max", with "+ extra" appended when there is any — sits inside
+// it, rather than floating above.
 
-const BAR_WIDTH = 46;
-const BAR_HEIGHT = 7;
-/** Slightly shorter than the track, so the fill reads as inset rather than
- *  edge-to-edge with it. */
-const BAR_FILL_HEIGHT = BAR_HEIGHT - 2;
-const BAR_TEXT_HEIGHT = 12;
-const BAR_TEXT_GAP = 1;
-const BAR_FONT_SIZE = 10;
-/** A sliver of fill stays visible above 0 hp — "barely alive" still reads as
- *  alive, the way the number never disappears either. */
-const MIN_FILL_WIDTH = 3;
-
-const HP_TRACK_FILL = "#241414";
-const HP_TRACK_OPACITY = 0.6;
-const HP_TRACK_STROKE = "#7f1d1d";
-const HP_TRACK_STROKE_OPACITY = 0.45;
-
-/** A dark outline on the number, since it now sits over a bar rather than a
- *  filled circle and needs to hold up against whatever art is underneath. */
-const BAR_TEXT_STROKE = "#000000";
-const BAR_TEXT_STROKE_OPACITY = 0.6;
+const PILL_HEIGHT = 15;
+const PILL_MIN_WIDTH = 34;
+const PILL_FONT_SIZE = 10;
+/** The label shrinks to this once it is too long to read comfortably at
+ *  full size — "120/150 + 25" is a lot of characters for a token-sized
+ *  pill. */
+const PILL_FONT_SIZE_SMALL = 8.5;
+/** Horizontal room around the text — roughly the width of the two rounded
+ *  caps put together. */
+const PILL_PADDING = 10;
+/** Past this many characters the label drops to the small size. */
+const PILL_LONG_LABEL_LENGTH = 10;
 
 // --- Attachment ids --------------------------------------------------------
 // Deterministic ids let the sync loop rebuild an attachment in place and find
@@ -65,8 +56,9 @@ const BAR_TEXT_STROKE_OPACITY = 0.6;
 export const MAX_CONDITION_BUBBLES = 4;
 
 const SUFFIXES = {
-  hpTrack: "/chong-hp-track",
-  hpFill: "/chong-hp-fill",
+  hpPillBody: "/chong-hp-pill-body",
+  hpPillCapL: "/chong-hp-pill-capl",
+  hpPillCapR: "/chong-hp-pill-capr",
   hpText: "/chong-hp-text",
   acCircle: "/chong-ac-circle",
   acText: "/chong-ac-text",
@@ -162,60 +154,98 @@ function buildBubble(item: Image, bubble: Bubble): Item[] {
 }
 
 /**
- * Builds the health bar: a track, a fill sized to HP over max HP, and the
- * number above it.
- *
- * No max HP recorded reads as a full bar — the same "no cap" reading `maxHp`
- * already has everywhere else — since there is nothing to measure the fill
- * against. HP at or below 0 drops the fill entirely; the track and the "0"
- * above it are what says the rest.
+ * The pill's label: "current/max", or just "current" once no max is
+ * recorded — the same "no cap" reading `maxHp` already has everywhere else —
+ * with "+ extra" appended whenever there is a nonzero extra HP to show.
  */
-function buildHealthBar(
+function pillLabel(record: TrackedRecord): string {
+  const hp = Math.max(record.hp, 0);
+  const base = record.maxHp > 0 ? `${hp}/${record.maxHp}` : `${hp}`;
+  return record.extraHp > 0 ? `${base} + ${record.extraHp}` : base;
+}
+
+/**
+ * How wide the pill needs to be to hold its label, and at what font size.
+ *
+ * There is no live text measurement here — this is a headless script with no
+ * guarantee of a working canvas — so it is the same length-based estimate
+ * `buildBubble` already uses for its own text, just applied to a string
+ * instead of a threshold.
+ */
+function pillGeometry(label: string): { fontSize: number; width: number } {
+  const fontSize =
+    label.length > PILL_LONG_LABEL_LENGTH
+      ? PILL_FONT_SIZE_SMALL
+      : PILL_FONT_SIZE;
+  const width = Math.max(
+    PILL_MIN_WIDTH,
+    Math.round(label.length * fontSize * 0.62) + PILL_PADDING,
+  );
+  return { fontSize, width };
+}
+
+/**
+ * Builds the health pill: a rounded-corner oblong with its label sitting
+ * inside it.
+ *
+ * There is no native rounded-rectangle shape, so the pill is a plain
+ * rectangle with a circle capping each end — sized so the circle's radius
+ * exactly matches the rectangle's half-height, which is what makes the seam
+ * disappear. All three pieces share one flat fill and no stroke, so nothing
+ * shows through where they overlap.
+ */
+function buildHealthPill(
   item: Image,
   record: TrackedRecord,
   center: { x: number; y: number },
 ): Item[] {
-  const hp = Math.max(record.hp, 0);
-  const ratio = record.maxHp > 0 ? Math.min(hp / record.maxHp, 1) : 1;
-  const fillWidth = hp <= 0 ? 0 : Math.max(BAR_WIDTH * ratio, MIN_FILL_WIDTH);
-  const left = center.x - BAR_WIDTH / 2;
+  const label = pillLabel(record);
+  const { fontSize, width } = pillGeometry(label);
+  const capRadius = PILL_HEIGHT / 2;
+  const bodyWidth = Math.max(width - PILL_HEIGHT, 0);
+  const left = center.x - width / 2;
+  const right = center.x + width / 2;
 
-  const items: Item[] = [
-    buildShape()
-      .id(`${item.id}${SUFFIXES.hpTrack}`)
-      .shapeType("RECTANGLE")
-      .width(BAR_WIDTH)
-      .height(BAR_HEIGHT)
-      .position(center)
-      .fillColor(HP_TRACK_FILL)
-      .fillOpacity(HP_TRACK_OPACITY)
-      .strokeColor(HP_TRACK_STROKE)
-      .strokeOpacity(HP_TRACK_STROKE_OPACITY)
-      .strokeWidth(1)
-      .zIndex(30_000)
-      .attachedTo(item.id)
-      .layer("ATTACHMENT")
-      .locked(true)
-      .visible(item.visible)
-      .disableHit(true)
-      .disableAttachmentBehavior(DISABLED_BEHAVIORS)
-      .build(),
-  ];
+  const items: Item[] = [];
 
-  if (fillWidth > 0) {
+  if (bodyWidth > 0) {
     items.push(
       buildShape()
-        .id(`${item.id}${SUFFIXES.hpFill}`)
+        .id(`${item.id}${SUFFIXES.hpPillBody}`)
         .shapeType("RECTANGLE")
-        .width(fillWidth)
-        .height(BAR_FILL_HEIGHT)
-        .position({ x: left + fillWidth / 2, y: center.y })
+        .width(bodyWidth)
+        .height(PILL_HEIGHT)
+        .position(center)
         .fillColor(HP_FILL)
         .fillOpacity(FILL_OPACITY)
-        .strokeColor(HP_STROKE)
-        .strokeOpacity(STROKE_OPACITY)
         .strokeWidth(0)
-        .zIndex(30_001)
+        .zIndex(30_000)
+        .attachedTo(item.id)
+        .layer("ATTACHMENT")
+        .locked(true)
+        .visible(item.visible)
+        .disableHit(true)
+        .disableAttachmentBehavior(DISABLED_BEHAVIORS)
+        .build(),
+    );
+  }
+
+  const caps: [string, number][] = [
+    [SUFFIXES.hpPillCapL, left + capRadius],
+    [SUFFIXES.hpPillCapR, right - capRadius],
+  ];
+  for (const [suffix, x] of caps) {
+    items.push(
+      buildShape()
+        .id(`${item.id}${suffix}`)
+        .shapeType("CIRCLE")
+        .width(PILL_HEIGHT)
+        .height(PILL_HEIGHT)
+        .position({ x, y: center.y })
+        .fillColor(HP_FILL)
+        .fillOpacity(FILL_OPACITY)
+        .strokeWidth(0)
+        .zIndex(30_000)
         .attachedTo(item.id)
         .layer("ATTACHMENT")
         .locked(true)
@@ -229,24 +259,19 @@ function buildHealthBar(
   items.push(
     buildText()
       .id(`${item.id}${SUFFIXES.hpText}`)
-      .position({
-        x: left,
-        y: center.y - BAR_HEIGHT / 2 - BAR_TEXT_GAP - BAR_TEXT_HEIGHT,
-      })
-      .plainText(String(hp))
+      .position({ x: left, y: center.y - PILL_HEIGHT / 2 })
+      .plainText(label)
       .textType("PLAIN")
       .textAlign("CENTER")
-      .textAlignVertical("BOTTOM")
-      .width(BAR_WIDTH)
-      .height(BAR_TEXT_HEIGHT)
-      .fontSize(BAR_FONT_SIZE)
+      .textAlignVertical("MIDDLE")
+      .width(width)
+      .height(PILL_HEIGHT)
+      .fontSize(fontSize)
       .fontFamily(FONT)
       .fontWeight(600)
       .fillColor(TEXT_COLOR)
       .fillOpacity(1)
-      .strokeColor(BAR_TEXT_STROKE)
-      .strokeOpacity(BAR_TEXT_STROKE_OPACITY)
-      .strokeWidth(2)
+      .strokeWidth(0)
       .lineHeight(1)
       .attachedTo(item.id)
       .layer("TEXT")
@@ -261,14 +286,14 @@ function buildHealthBar(
 }
 
 /**
- * Builds the health bar and AC bubble for a token.
+ * Builds the health pill and AC bubble for a token.
  *
- * They sit on the bottom edge — the bar bottom-left, AC bottom-right — and
+ * They sit on the bottom edge — the pill bottom-left, AC bottom-right — and
  * hold those positions whether or not AC is shown, so nothing jumps sideways
  * when you fill it in. On a token too narrow for both, each tucks toward the
  * middle rather than overlapping the other.
  *
- * Only ever called for a token a record is linked to, so the bar always
+ * Only ever called for a token a record is linked to, so the pill always
  * draws — linking is the deliberate act that says "put this one on the map".
  * Scenery and unlinked tokens are never passed here at all.
  */
@@ -284,18 +309,19 @@ export function buildAttachments(
   const { center, width, height } = getTokenBounds(item, sceneDpi);
   const bottom = center.y + height / 2;
 
-  const barHalfSpan = Math.max(
-    width / 2 - BAR_WIDTH / 2 - EDGE_PADDING,
-    BAR_WIDTH / 2,
+  const pillWidth = pillGeometry(pillLabel(record)).width;
+  const pillHalfSpan = Math.max(
+    width / 2 - pillWidth / 2 - EDGE_PADDING,
+    pillWidth / 2,
   );
   const acHalfSpan = Math.max(
     width / 2 - DIAMETER / 2 - EDGE_PADDING,
     DIAMETER / 2,
   );
 
-  const items: Item[] = buildHealthBar(item, record, {
-    x: center.x - barHalfSpan,
-    y: bottom - BAR_HEIGHT / 2 - EDGE_PADDING,
+  const items: Item[] = buildHealthPill(item, record, {
+    x: center.x - pillHalfSpan,
+    y: bottom - PILL_HEIGHT / 2 - EDGE_PADDING,
   });
 
   if (showAc) {
@@ -341,12 +367,12 @@ export function buildAttachments(
 }
 
 /**
- * Everything about a token that changes what its bar and bubbles look like.
+ * Everything about a token that changes what its pill and bubbles look like.
  *
  * The sync loop compares these strings instead of re-deriving geometry, so a
  * scene change that only moves an unrelated item costs one string compare.
- * `maxHp` is here because it changes the bar's fill even when HP itself has
- * not moved.
+ * `maxHp` and `extraHp` are both here because either changes the pill's
+ * label, and therefore its width, even when `hp` itself has not moved.
  */
 export function attachmentSignature(
   item: Image,
@@ -356,6 +382,7 @@ export function attachmentSignature(
   return [
     record.hp,
     record.maxHp,
+    record.extraHp,
     record.ac,
     record.conditions
       .slice(0, MAX_CONDITION_BUBBLES)

@@ -120,19 +120,18 @@ describe("releaseToken", () => {
 });
 
 describe("extra hp", () => {
-  it("folds into hp on read and always reads back 0", () => {
+  it("is its own value, independent of hp", () => {
     const parsed = parseRecords({
       [RECORDS_KEY]: [{ id: "a", hp: 5, extraHp: 4 }],
     });
-    expect(parsed[0]?.hp).toBe(9);
-    expect(parsed[0]?.extraHp).toBe(0);
+    expect(parsed[0]?.hp).toBe(5);
+    expect(parsed[0]?.extraHp).toBe(4);
   });
 
-  it("still caps the folded total at max hp", () => {
+  it("floors at 0 but has no max of its own", () => {
     const parsed = parseRecords({
-      [RECORDS_KEY]: [{ id: "a", hp: 8, extraHp: 5, maxHp: 10 }],
+      [RECORDS_KEY]: [{ id: "a", hp: 8, extraHp: -3, maxHp: 10 }],
     });
-    expect(parsed[0]?.hp).toBe(10);
     expect(parsed[0]?.extraHp).toBe(0);
   });
 });
