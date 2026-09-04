@@ -19,6 +19,9 @@ without it.
   there.** Everything else opens in a panel underneath the row, which is also
   the only place it can be changed. A mistimed click during combat can cost you
   a hit point; it can never rename a character or unlink its token.
+  Once there is extra HP, the HP field splits in half — current HP on the
+  left, extra HP on the right — so a temporary pool can be spent down without
+  opening the panel; with none, it is one plain field like always.
   Drag rows to reorder; the order sticks.
 - **Tabs, three to a row, one list at a time.** `Player`, `Ungrouped`, then a
   tab per category — so AZRAQI and Undead are two tabs rather than two headings
@@ -111,15 +114,15 @@ without it.
   link does — see below.
 - **Hiding is a property of the category.** Players never see a hidden category
   or anything in it; the GM always sees every one. New categories start hidden,
-  so staging the next wave takes one step and reveals in one click. The pill
-  and bubble on the linked tokens are unaffected — a monster still shows HP
-  and AC on the map; the roster line is what hides, not the numbers.
-- **A health pill and an AC bubble on the linked token.** A small
-  rounded-corner oblong sits bottom-left with the number inside it — `8/8`,
-  or `8/8 + 8` once there is extra HP to show; AC stays a small circle,
-  bottom-right in slate. The pill always draws, because linking a token is
-  the deliberate act that says "put this one on the map"; AC appears once
-  you fill it in. An unlinked record draws nothing anywhere.
+  so staging the next wave takes one step and reveals in one click. The
+  bubbles on the linked tokens are unaffected — a monster still shows HP and
+  AC on the map; the roster line is what hides, not the numbers.
+- **Bubbles on the linked token.** HP bottom-left in red, AC bottom-right in
+  slate — HP always draws, because linking a token is the deliberate act that
+  says "put this one on the map"; AC appears once you fill it in. Extra HP
+  gets its own small green circle tucked in right beside HP, and only once
+  there is any — a record with none looks exactly like it always has. An
+  unlinked record draws nothing anywhere.
 
 Everyone in the room sees the panel and can edit it.
 
@@ -138,9 +141,9 @@ npm run build     # → docs/  (nothing is published until you run this)
 To try your changes, run `npm run dev`, then in an Owlbear room choose
 **Add Extension** and paste `http://localhost:5173/manifest.json`.
 
-The panel hot-reloads as you edit. The code that draws the pill and bubbles on
-tokens runs once per page load, so refresh the Owlbear tab after changing
-anything under `src/obr/`.
+The panel hot-reloads as you edit. The code that draws the bubbles on tokens
+runs once per page load, so refresh the Owlbear tab after changing anything
+under `src/obr/`.
 
 ## Publishing
 
@@ -192,14 +195,14 @@ it (Ctrl+Shift+R), then reload Owlbear.
 
 ```
 manifest.json    what Owlbear loads
-background.html  headless; draws the HP pill and AC bubble
+background.html  headless; draws the HP, extra-HP and AC bubbles
 action.html      the tracker panel
 index.html       landing page that prints the install URL
 ```
 
 ```
 src/core/    records, categories, command parser, inline math, AC, settings
-src/obr/     bounds maths, health pill and bubble builders, the sync loop
+src/obr/     bounds maths, bubble builders, the sync loop
 src/ui/      the panel
 ```
 
@@ -277,10 +280,9 @@ src/ui/      the panel
   at a time, so re-linking on a second map replaces the first. This applies
   doubly to non-player records, which cannot even be edited from a different
   scene: they are not there to edit.
-- **Attachments are local items.** Each client draws its own health pill and
-  bubbles from the shared records, so the scene file stays clean, undo history
-  is not full of attachment items, and nothing is replicated four times per
-  token.
+- **Attachments are local items.** Each client draws its own bubbles from the
+  shared records, so the scene file stays clean, undo history is not full of
+  attachment items, and nothing is replicated four times per token.
 - **Writes re-read first.** Every record is in one array under one key, so a
   write is built from the room's and scene's current metadata rather than the
   copy the panel is holding — otherwise two people editing different records
@@ -308,15 +310,14 @@ src/ui/      the panel
 - **The sync loop diffs.** It compares a signature string per token and only
   rebuilds attachments whose geometry or stats actually moved.
 - **Attachments key off metadata presence, not value.** A monster knocked to 0
-  HP still shows a pill reading `0`; a token nobody has touched shows nothing.
-  Checking for a non-zero value would make dead monsters look untracked.
-- **The pill is a rectangle and two circles, not a rounded-rectangle shape.**
-  Owlbear's shape builder only draws `RECTANGLE`, `CIRCLE`, `TRIANGLE` and
-  `HEXAGON` — no corner radius. A circle whose radius matches the rectangle's
-  half-height, centered on each short edge, lands exactly on that edge's
-  corners, so the seam disappears; all three pieces share one flat fill and
-  skip the stroke entirely; a stroke on all three would leave the rectangle's
-  straight edges visible as two lines cutting through the rounded caps.
+  HP still shows a `0` bubble; a token nobody has touched shows none. Checking
+  for a non-zero value would make dead monsters look untracked.
+- **Extra HP is a separate bubble rather than a merged number.** It was folded
+  into the HP bubble for one version of this extension, and that reads as
+  confusing rather than compact — a `16` that is actually `8` real plus `8`
+  temporary looks like an unremarkable eight-more-than-it-is. A second circle
+  keeps the two legible at a glance, the same way AC gets its own bubble
+  rather than sharing HP's.
 - **Expired conditions are kept, not deleted.** A duration of 0 turns red and
   stays put. The counter's job is counting; deciding an effect has actually
   ended is the GM's call — and keeping the row is what lets stepping the round

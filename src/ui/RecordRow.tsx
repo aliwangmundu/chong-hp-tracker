@@ -1,7 +1,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import OBR from "@owlbear-rodeo/sdk";
-import { clampHp } from "@/core/inlineMath";
+import { clampExtraHp, clampHp } from "@/core/inlineMath";
 import type {
   AssignableToken,
   NumericStatKey,
@@ -57,9 +57,10 @@ async function focusToken(id: string): Promise<void> {
 /**
  * The always-visible line: token slot, name, HP.
  *
- * HP is the only value editable here. Everything else — the name included —
- * lives in the expanded panel, so a mistimed click during combat can cost you a
- * hit point but never rename a character.
+ * HP — and extra HP, once there is any — is the only thing editable here.
+ * Everything else — the name included — lives in the expanded panel, so a
+ * mistimed click during combat can cost you a hit point but never rename a
+ * character.
  *
  * The only other thing a click does here is link a token, from the slot on the
  * left.
@@ -171,15 +172,42 @@ export default function RecordRow({
         {record.name || token?.name || "Unnamed"}
       </span>
 
-      <StatField
-        label={`${record.name || "Record"} hit points`}
-        value={record.hp}
-        widthClass="w-20 shrink-0"
-        big
-        onCommit={(next) =>
-          onStatChange(record.id, "hp", clampHp(next, record.maxHp))
-        }
-      />
+      {record.extraHp > 0 ? (
+        // Cut in half rather than one wide field: left is HP, right is extra
+        // HP, so a temporary pool can be spent down without opening the
+        // panel — the reason it has its own slot at all.
+        <div className="flex w-20 shrink-0">
+          <StatField
+            label={`${record.name || "Record"} hit points`}
+            value={record.hp}
+            widthClass="w-1/2"
+            rounded="left"
+            onCommit={(next) =>
+              onStatChange(record.id, "hp", clampHp(next, record.maxHp))
+            }
+          />
+          <StatField
+            label={`${record.name || "Record"} extra hit points`}
+            value={record.extraHp}
+            widthClass="w-1/2"
+            rounded="right"
+            tone="extra"
+            onCommit={(next) =>
+              onStatChange(record.id, "extraHp", clampExtraHp(next))
+            }
+          />
+        </div>
+      ) : (
+        <StatField
+          label={`${record.name || "Record"} hit points`}
+          value={record.hp}
+          widthClass="w-20 shrink-0"
+          big
+          onCommit={(next) =>
+            onStatChange(record.id, "hp", clampHp(next, record.maxHp))
+          }
+        />
+      )}
 
       {showAdjust && (
         <AdjustButton

@@ -18,6 +18,10 @@ const FONT_SIZE_SMALL = 13;
 const EDGE_PADDING = 2;
 
 const HP_FILL = "#8b1c1c";
+const HP_STROKE = "#fca5a5";
+/** Extra HP's own circle — green, next to HP rather than merged into it. */
+const EXTRA_FILL = "#166534";
+const EXTRA_STROKE = "#86efac";
 const AC_FILL = "#1e293b";
 const AC_STROKE = "#cbd5e1";
 const CONDITION_FILL = "#4c1d95";
@@ -30,24 +34,6 @@ const TEXT_COLOR = "#ffffff";
 const FILL_OPACITY = 0.85;
 const STROKE_OPACITY = 0.55;
 
-// --- The health pill ---------------------------------------------------
-// A small rounded-corner oblong rather than a bar or a circle: the number —
-// "current/max", with "+ extra" appended when there is any — sits inside
-// it, rather than floating above.
-
-const PILL_HEIGHT = 15;
-const PILL_MIN_WIDTH = 34;
-const PILL_FONT_SIZE = 10;
-/** The label shrinks to this once it is too long to read comfortably at
- *  full size — "120/150 + 25" is a lot of characters for a token-sized
- *  pill. */
-const PILL_FONT_SIZE_SMALL = 8.5;
-/** Horizontal room around the text — roughly the width of the two rounded
- *  caps put together. */
-const PILL_PADDING = 10;
-/** Past this many characters the label drops to the small size. */
-const PILL_LONG_LABEL_LENGTH = 10;
-
 // --- Attachment ids --------------------------------------------------------
 // Deterministic ids let the sync loop rebuild an attachment in place and find
 // orphans without keeping a side table.
@@ -56,10 +42,10 @@ const PILL_LONG_LABEL_LENGTH = 10;
 export const MAX_CONDITION_BUBBLES = 4;
 
 const SUFFIXES = {
-  hpPillBody: "/chong-hp-pill-body",
-  hpPillCapL: "/chong-hp-pill-capl",
-  hpPillCapR: "/chong-hp-pill-capr",
+  hpCircle: "/chong-hp-circle",
   hpText: "/chong-hp-text",
+  extraCircle: "/chong-extra-circle",
+  extraText: "/chong-extra-text",
   acCircle: "/chong-ac-circle",
   acText: "/chong-ac-text",
 } as const;
@@ -154,148 +140,17 @@ function buildBubble(item: Image, bubble: Bubble): Item[] {
 }
 
 /**
- * The pill's label: "current/max", or just "current" once no max is
- * recorded — the same "no cap" reading `maxHp` already has everywhere else —
- * with "+ extra" appended whenever there is a nonzero extra HP to show.
- */
-function pillLabel(record: TrackedRecord): string {
-  const hp = Math.max(record.hp, 0);
-  const base = record.maxHp > 0 ? `${hp}/${record.maxHp}` : `${hp}`;
-  return record.extraHp > 0 ? `${base} + ${record.extraHp}` : base;
-}
-
-/**
- * How wide the pill needs to be to hold its label, and at what font size.
+ * Builds the HP, extra-HP and AC bubbles for a token.
  *
- * There is no live text measurement here — this is a headless script with no
- * guarantee of a working canvas — so it is the same length-based estimate
- * `buildBubble` already uses for its own text, just applied to a string
- * instead of a threshold.
- */
-function pillGeometry(label: string): { fontSize: number; width: number } {
-  const fontSize =
-    label.length > PILL_LONG_LABEL_LENGTH
-      ? PILL_FONT_SIZE_SMALL
-      : PILL_FONT_SIZE;
-  const width = Math.max(
-    PILL_MIN_WIDTH,
-    Math.round(label.length * fontSize * 0.62) + PILL_PADDING,
-  );
-  return { fontSize, width };
-}
-
-/**
- * Builds the health pill: a rounded-corner oblong with its label sitting
- * inside it.
+ * HP sits bottom-left, AC bottom-right, and hold those positions whether or
+ * not AC is shown, so nothing jumps sideways when you fill it in. Extra HP
+ * tucks in immediately beside HP, on the outside — toward the middle of the
+ * token, away from AC — and only when there is any to show; a record with no
+ * extra HP looks exactly like it did before extra HP existed.
  *
- * There is no native rounded-rectangle shape, so the pill is a plain
- * rectangle with a circle capping each end — sized so the circle's radius
- * exactly matches the rectangle's half-height, which is what makes the seam
- * disappear. All three pieces share one flat fill and no stroke, so nothing
- * shows through where they overlap.
- */
-function buildHealthPill(
-  item: Image,
-  record: TrackedRecord,
-  center: { x: number; y: number },
-): Item[] {
-  const label = pillLabel(record);
-  const { fontSize, width } = pillGeometry(label);
-  const capRadius = PILL_HEIGHT / 2;
-  const bodyWidth = Math.max(width - PILL_HEIGHT, 0);
-  const left = center.x - width / 2;
-  const right = center.x + width / 2;
-
-  const items: Item[] = [];
-
-  if (bodyWidth > 0) {
-    items.push(
-      buildShape()
-        .id(`${item.id}${SUFFIXES.hpPillBody}`)
-        .shapeType("RECTANGLE")
-        .width(bodyWidth)
-        .height(PILL_HEIGHT)
-        .position(center)
-        .fillColor(HP_FILL)
-        .fillOpacity(FILL_OPACITY)
-        .strokeWidth(0)
-        .zIndex(30_000)
-        .attachedTo(item.id)
-        .layer("ATTACHMENT")
-        .locked(true)
-        .visible(item.visible)
-        .disableHit(true)
-        .disableAttachmentBehavior(DISABLED_BEHAVIORS)
-        .build(),
-    );
-  }
-
-  const caps: [string, number][] = [
-    [SUFFIXES.hpPillCapL, left + capRadius],
-    [SUFFIXES.hpPillCapR, right - capRadius],
-  ];
-  for (const [suffix, x] of caps) {
-    items.push(
-      buildShape()
-        .id(`${item.id}${suffix}`)
-        .shapeType("CIRCLE")
-        .width(PILL_HEIGHT)
-        .height(PILL_HEIGHT)
-        .position({ x, y: center.y })
-        .fillColor(HP_FILL)
-        .fillOpacity(FILL_OPACITY)
-        .strokeWidth(0)
-        .zIndex(30_000)
-        .attachedTo(item.id)
-        .layer("ATTACHMENT")
-        .locked(true)
-        .visible(item.visible)
-        .disableHit(true)
-        .disableAttachmentBehavior(DISABLED_BEHAVIORS)
-        .build(),
-    );
-  }
-
-  items.push(
-    buildText()
-      .id(`${item.id}${SUFFIXES.hpText}`)
-      .position({ x: left, y: center.y - PILL_HEIGHT / 2 })
-      .plainText(label)
-      .textType("PLAIN")
-      .textAlign("CENTER")
-      .textAlignVertical("MIDDLE")
-      .width(width)
-      .height(PILL_HEIGHT)
-      .fontSize(fontSize)
-      .fontFamily(FONT)
-      .fontWeight(600)
-      .fillColor(TEXT_COLOR)
-      .fillOpacity(1)
-      .strokeWidth(0)
-      .lineHeight(1)
-      .attachedTo(item.id)
-      .layer("TEXT")
-      .locked(true)
-      .visible(item.visible)
-      .disableHit(true)
-      .disableAttachmentBehavior(DISABLED_BEHAVIORS)
-      .build(),
-  );
-
-  return items;
-}
-
-/**
- * Builds the health pill and AC bubble for a token.
- *
- * They sit on the bottom edge — the pill bottom-left, AC bottom-right — and
- * hold those positions whether or not AC is shown, so nothing jumps sideways
- * when you fill it in. On a token too narrow for both, each tucks toward the
- * middle rather than overlapping the other.
- *
- * Only ever called for a token a record is linked to, so the pill always
- * draws — linking is the deliberate act that says "put this one on the map".
- * Scenery and unlinked tokens are never passed here at all.
+ * Only ever called for a token a record is linked to, so HP always draws —
+ * linking is the deliberate act that says "put this one on the map". Scenery
+ * and unlinked tokens are never passed here at all.
  */
 export function buildAttachments(
   item: Image,
@@ -303,26 +158,48 @@ export function buildAttachments(
   sceneDpi: number,
 ): Item[] {
   const conditions = record.conditions.slice(0, MAX_CONDITION_BUBBLES);
-  // AC only shows once it has been filled in.
+  // AC only shows once it has been filled in; extra HP once it is above 0.
   const showAc = record.ac !== "";
+  const showExtra = record.extraHp > 0;
 
   const { center, width, height } = getTokenBounds(item, sceneDpi);
   const bottom = center.y + height / 2;
 
-  const pillWidth = pillGeometry(pillLabel(record)).width;
-  const pillHalfSpan = Math.max(
-    width / 2 - pillWidth / 2 - EDGE_PADDING,
-    pillWidth / 2,
+  const hpHalfSpan = Math.max(
+    width / 2 - DIAMETER / 2 - EDGE_PADDING,
+    DIAMETER / 2,
   );
   const acHalfSpan = Math.max(
     width / 2 - DIAMETER / 2 - EDGE_PADDING,
     DIAMETER / 2,
   );
 
-  const items: Item[] = buildHealthPill(item, record, {
-    x: center.x - pillHalfSpan,
-    y: bottom - PILL_HEIGHT / 2 - EDGE_PADDING,
+  const hpCenter = {
+    x: center.x - hpHalfSpan,
+    y: bottom - DIAMETER / 2 - EDGE_PADDING,
+  };
+
+  const items: Item[] = buildBubble(item, {
+    id: `${item.id}${SUFFIXES.hpCircle}`,
+    textId: `${item.id}${SUFFIXES.hpText}`,
+    value: String(Math.max(record.hp, 0)),
+    fill: HP_FILL,
+    stroke: HP_STROKE,
+    center: hpCenter,
   });
+
+  if (showExtra) {
+    items.push(
+      ...buildBubble(item, {
+        id: `${item.id}${SUFFIXES.extraCircle}`,
+        textId: `${item.id}${SUFFIXES.extraText}`,
+        value: String(record.extraHp),
+        fill: EXTRA_FILL,
+        stroke: EXTRA_STROKE,
+        center: { x: hpCenter.x + DIAMETER + 2, y: hpCenter.y },
+      }),
+    );
+  }
 
   if (showAc) {
     items.push(
@@ -338,7 +215,7 @@ export function buildAttachments(
   }
 
   // Conditions run along the top edge, left to right, so they never collide
-  // with the bar and AC bubble sitting on the bottom one.
+  // with the bubbles sitting on the bottom one.
   if (conditions.length > 0) {
     const top = center.y - height / 2 + DIAMETER / 2 + EDGE_PADDING;
     const step = DIAMETER + 2;
@@ -367,12 +244,12 @@ export function buildAttachments(
 }
 
 /**
- * Everything about a token that changes what its pill and bubbles look like.
+ * Everything about a token that changes what its bubbles look like.
  *
  * The sync loop compares these strings instead of re-deriving geometry, so a
  * scene change that only moves an unrelated item costs one string compare.
- * `maxHp` and `extraHp` are both here because either changes the pill's
- * label, and therefore its width, even when `hp` itself has not moved.
+ * `extraHp` is here because it decides whether the extra-HP bubble exists at
+ * all, not only what it says.
  */
 export function attachmentSignature(
   item: Image,
@@ -381,7 +258,6 @@ export function attachmentSignature(
 ): string {
   return [
     record.hp,
-    record.maxHp,
     record.extraHp,
     record.ac,
     record.conditions

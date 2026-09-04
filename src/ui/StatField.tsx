@@ -17,6 +17,15 @@ type Props = {
    */
   allowMath?: boolean;
   disabled?: boolean;
+  /**
+   * Which corners round off. "left"/"right" let two fields sit flush against
+   * each other as one control split down the middle — the right field also
+   * drops its left border, so the seam is a single line rather than a double
+   * one.
+   */
+  rounded?: "all" | "left" | "right";
+  /** A green cast, for the extra-HP half of a split HP field. */
+  tone?: "default" | "extra";
 };
 
 const ERROR_FLASH_MS = 700;
@@ -38,6 +47,8 @@ export default function StatField({
   big = false,
   allowMath = true,
   disabled = false,
+  rounded = "all",
+  tone = "default",
 }: Props) {
   const [draft, setDraft] = useState<string | null>(null);
   const [errored, setErrored] = useState(false);
@@ -64,6 +75,13 @@ export default function StatField({
 
   const editing = draft !== null;
   const shown = editing ? draft : String(value);
+
+  const roundedClass =
+    rounded === "left"
+      ? "rounded-l-md rounded-r-none"
+      : rounded === "right"
+        ? "rounded-r-md rounded-l-none border-l-0"
+        : "rounded-md";
 
   // Only preview when the draft is doing something a plain number would not.
   const preview = (() => {
@@ -121,9 +139,14 @@ export default function StatField({
         className={[
           widthClass,
           big ? "px-2 py-2 text-base font-medium" : "px-1.5 py-1 text-sm",
-          "no-spinner rounded-md border text-center tabular-nums outline-none transition-colors",
-          "border-ink-200 bg-white text-ink-900 hover:border-ink-300",
-          "dark:border-ink-800 dark:bg-ink-950 dark:text-ink-100 dark:hover:border-ink-700",
+          "no-spinner border text-center tabular-nums outline-none transition-colors",
+          roundedClass,
+          tone === "extra"
+            ? "border-ink-200 bg-white text-green-700 hover:border-ink-300"
+            : "border-ink-200 bg-white text-ink-900 hover:border-ink-300",
+          tone === "extra"
+            ? "dark:border-ink-800 dark:bg-ink-950 dark:text-green-400 dark:hover:border-ink-700"
+            : "dark:border-ink-800 dark:bg-ink-950 dark:text-ink-100 dark:hover:border-ink-700",
           "focus:border-ink-400 focus:ring-2 focus:ring-ink-400/30 dark:focus:border-ink-500 dark:focus:ring-ink-500/30",
           "disabled:opacity-50",
           errored
